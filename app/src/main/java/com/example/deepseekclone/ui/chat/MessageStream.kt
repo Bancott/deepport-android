@@ -84,6 +84,7 @@ fun MessageStream(
     onRetry: (MessageUi) -> Unit = {},
     onEdit: (MessageUi) -> Unit = {},
     onSourcesClick: (MessageUi) -> Unit = {},
+    onSelectText: (MessageUi) -> Unit = {},
     onBranchPrev: (MessageUi) -> Unit = {},
     onBranchNext: (MessageUi) -> Unit = {},
 ) {
@@ -110,7 +111,11 @@ fun MessageStream(
     ) {
         items(messages, key = { it.id }) { message ->
             when (message.role) {
-                ChatRole.User -> UserMessage(message = message, onEdit = { onEdit(message) })
+                ChatRole.User -> UserMessage(
+                    message = message,
+                    onEdit = { onEdit(message) },
+                    onSelectText = { onSelectText(message) },
+                )
                 ChatRole.Assistant -> AssistantMessage(
                     message = message,
                     sessionTokens = sessionTokens,
@@ -132,7 +137,7 @@ fun MessageStream(
 /* ----------------------------- 用户气泡 ----------------------------- */
 
 @Composable
-private fun UserMessage(message: MessageUi, onEdit: () -> Unit) {
+private fun UserMessage(message: MessageUi, onEdit: () -> Unit, onSelectText: () -> Unit) {
     val colors = DsTheme.colors
     Row(
         modifier = Modifier
@@ -146,6 +151,7 @@ private fun UserMessage(message: MessageUi, onEdit: () -> Unit) {
             expanded = menuExpanded.value,
             onExpandedChange = { menuExpanded.value = it },
             onEdit = onEdit,
+            onSelectText = onSelectText,
         ) {
             Column(horizontalAlignment = Alignment.End) {
                 if (message.attachments.isNotEmpty()) {

@@ -32,6 +32,7 @@ fun MessageLongPressBox(
     onExpandedChange: (Boolean) -> Unit,
     onRegenerate: () -> Unit = {},
     onEdit: () -> Unit = {},
+    onSelectText: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -53,7 +54,12 @@ fun MessageLongPressBox(
     val isUser = message.role == ChatRole.User
     val actions = buildList {
         add(MenuAction("复制") { copyToClipboard(); onExpandedChange(false) })
-        add(MenuAction("选择文本") { onExpandedChange(false) })
+        add(
+            MenuAction("选择文本") {
+                onSelectText()
+                onExpandedChange(false)
+            },
+        )
         if (isUser) {
             add(
                 MenuAction("编辑") {

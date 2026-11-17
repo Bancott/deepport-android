@@ -107,6 +107,7 @@ fun ChatScreen(
     // 附件面板：点「+」展开，键盘弹起 / 发出消息后自动收起
     var attachOpen by remember { mutableStateOf(false) }
     var sourcesSheet by remember { mutableStateOf<List<SourceItem>?>(null) }
+    var selectTextFor by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(imeBottomPx) { if (imeBottomPx > 0) attachOpen = false }
     LaunchedEffect(state.messages.size) { attachOpen = false }
     Box(
@@ -168,6 +169,7 @@ fun ChatScreen(
                         onRetry = onRetryMessage,
                         onEdit = onEditMessage,
                         onSourcesClick = { message -> sourcesSheet = message.sources },
+                        onSelectText = { message -> selectTextFor = message.text },
                         onBranchPrev = onBranchPrev,
                         onBranchNext = onBranchNext,
                     )
@@ -236,6 +238,10 @@ fun ChatScreen(
         // 按住说话：整屏泛光 + 提示 + 波形（盖在最上层；纯绘制，不拦触摸）
         if (voiceRecording) {
             VoiceOverlay(cancel = voiceCancel, levels = voiceLevels)
+        }
+
+        selectTextFor?.let { text ->
+            TextSelectionDialog(text = text, onDismiss = { selectTextFor = null })
         }
 
         sourcesSheet?.let { list ->

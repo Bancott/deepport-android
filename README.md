@@ -101,7 +101,7 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 2. 数据层升级：Room（消息树）+ OkHttp SSE + Retrofit；当前是 JSON + SharedPreferences + HttpURLConnection
 3. 来源列表的真实站点图标（现在用域名首字母 + 散列配色做离线徽标）
 4. 语音识别的内置服务（现在要在设置里自己填 OpenAI 兼容的 /audio/transcriptions）
-5. 消息「选择文本」仍是空实现；分享也没有做官方那种图片卡片
+5. 分享还没有做官方那种图片卡片；消息本体不能直接拖选（走「选择文本」弹窗）
 
 
 ## 6. 分支树 / 会话管理 / 附件 / 语音（本轮）
@@ -118,6 +118,7 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 - **朗读**：`Speaker` 包系统 `TextToSpeech`（Manifest 里补了 `TTS_SERVICE` 的 queries，否则 Android 11+ 绑不上引擎）；动作条喇叭读当前回答，顶栏喇叭打开后新回答生成完自动读；朗读前把 Markdown 洗成纯文本（去代码块/强调/链接语法）。没有正文的消息点了会提示"还没有可朗读的正文"。
 - **消息编辑**：用户消息长按 → 编辑（多行弹窗），确认后在同一父节点下新建用户节点并重新回答，原答案保留在 `‹n/m›` 分支里。
 - **智能搜索**：`搜索` 开关现在真的进请求体（`search: true`），400 时自动退回不带搜索重发一次；响应里若有 `search_results` / `references` / `sources` 就归一化成来源列表。
+- **选择文本**：长按菜单 → 选择文本，弹出可自由选段的弹窗（SelectionContainer），底部有「全选并复制」。
 - **来源列表**：回答下方「N 个网页」可点，底部 Sheet 列出站点徽标（域名首字母 + 按域名散列配色，离线也有稳定图标）/ 标题 / 摘要，点条目在 App 内置 WebView 里打开（标题「来源」）。
 - **输出额度**：`max_tokens` 从 1024 提到 8192 —— 深度思考会把思考过程算进输出额度，1024 经常"想完就没正文"；`finish_reason=length` 时回答下方会提示被截断，正文为空时也会提示"这次没有生成正文，可点重新生成再试"。
 
