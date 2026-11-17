@@ -110,7 +110,7 @@ fun ChatScreen(
                 contentDescription = "新建对话",
                 onClick = onNewChatClick,
             ) {
-                SvgIcon(R.drawable.ic_action_new_chat, tint = colors.textPrimary, size = 24.dp)
+                SvgIcon(R.drawable.ic_action_new_chat, tint = colors.textPrimary, size = 19.dp)
             }
         }
 
@@ -263,5 +263,7 @@ private fun ChatVoiceLightPreview() {
 private val DisclaimerBlockTopPadding = 3.dp
 private val DisclaimerBlockBottomPadding = 10.dp
 private val DisclaimerBlockHeight = 27.dp
+
+
 
 

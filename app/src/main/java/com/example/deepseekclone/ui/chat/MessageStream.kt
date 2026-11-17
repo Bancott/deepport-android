@@ -407,12 +407,12 @@ private fun MessageActionBar(
             onClick = onCopy,
         )
         ActionIcon(
-            icon = { tint -> SvgIcon(R.drawable.ic_action_volume, tint = tint, size = 20.dp) },
+            icon = { tint -> SvgIcon(R.drawable.ic_action_volume, tint = tint, size = 21.dp) },
             label = "朗读",
             onClick = onSpeak,
         )
         ActionIcon(
-            icon = { tint -> SvgIcon(R.drawable.ic_action_share, tint = tint, size = 17.dp) },
+            icon = { tint -> SvgIcon(R.drawable.ic_action_share, tint = tint, size = 18.dp) },
             label = "分享",
             onClick = onShare,
         )
@@ -422,7 +422,7 @@ private fun MessageActionBar(
         TokenInline(message = message, sessionTokens = sessionTokens)
 
         ActionIcon(
-            icon = { tint -> SvgIcon(R.drawable.ic_action_refresh, tint = tint, size = 19.dp) },
+            icon = { tint -> SvgIcon(R.drawable.ic_action_refresh, tint = tint, size = 21.dp) },
             label = "重新生成",
             onClick = onRegenerate,
         )
@@ -533,6 +533,10 @@ private fun TokenInline(message: MessageUi, sessionTokens: Int) {
         )
     }
 }
+
+
+
+
 
 
 

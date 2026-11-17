@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <!-- 语音：外圈 Ø24.4（描边 1.9，与加号按钮同尺寸）；内部声波整体再缩 0.88（绕圆心） -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="25dp"
@@ -8,12 +8,12 @@
     <path
         android:pathData="M12.5,1.25 A11.25,11.25 0 1,0 12.5,23.75 A11.25,11.25 0 1,0 12.5,1.25 Z"
         android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.9" />
+        android:strokeWidth="2.1" />
     <group
         android:pivotX="12.5"
         android:pivotY="12.5"
-        android:scaleX="0.88"
-        android:scaleY="0.88">
+        android:scaleX="0.95"
+        android:scaleY="0.95">
         <group
             android:scaleX="0.0189"
             android:scaleY="0.0189"
@@ -28,3 +28,5 @@
         </group>
     </group>
 </vector>
+
+
