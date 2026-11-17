@@ -281,7 +281,7 @@ private fun ActionRow(
                 onClick = onToggleMode,
             ) {
                 if (state.mode == InputMode.Text) {
-                    VoiceGlyph(color = colors.textPrimary, iconSize = 23.5.dp)
+                    VoiceGlyph(color = colors.textPrimary, iconSize = 25.dp)
                 } else {
                     Icon(
                         imageVector = Icons.Outlined.Keyboard,
@@ -336,6 +336,7 @@ private fun SendOrStopButton(
         }
     }
 }
+
 
 
 

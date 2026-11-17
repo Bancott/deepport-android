@@ -1,5 +1,7 @@
 ﻿package com.example.deepseekclone.ui.chat
 
+import com.example.deepseekclone.R
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -54,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.ui.chat.markdown.MarkdownText
 import com.example.deepseekclone.ui.common.GlobeGlyph
 import com.example.deepseekclone.ui.theme.DsText
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DsTheme
 
 /** 会话消息流：LazyColumn + 稳定 key，用户气泡与 AI 通栏回答两种形态。 */
@@ -399,38 +402,17 @@ private fun MessageActionBar(
         }
 
         ActionIcon(
-            icon = { tint ->
-                Icon(
-                    imageVector = Icons.Outlined.ContentCopy,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(20.dp),
-                )
-            },
+            icon = { tint -> SvgIcon(R.drawable.ic_action_copy, tint = tint, size = 23.dp) },
             label = "复制",
             onClick = onCopy,
         )
         ActionIcon(
-            icon = { tint ->
-                Icon(
-                    imageVector = Icons.Outlined.VolumeUp,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(20.dp),
-                )
-            },
+            icon = { tint -> SvgIcon(R.drawable.ic_action_volume, tint = tint, size = 20.dp) },
             label = "朗读",
             onClick = onSpeak,
         )
         ActionIcon(
-            icon = { tint ->
-                Icon(
-                    imageVector = Icons.Outlined.Share,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(23.dp),
-                )
-            },
+            icon = { tint -> SvgIcon(R.drawable.ic_action_share, tint = tint, size = 17.dp) },
             label = "分享",
             onClick = onShare,
         )
@@ -440,14 +422,7 @@ private fun MessageActionBar(
         TokenInline(message = message, sessionTokens = sessionTokens)
 
         ActionIcon(
-            icon = { tint ->
-                Icon(
-                    imageVector = Icons.Outlined.Refresh,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(24.dp),
-                )
-            },
+            icon = { tint -> SvgIcon(R.drawable.ic_action_refresh, tint = tint, size = 19.dp) },
             label = "重新生成",
             onClick = onRegenerate,
         )
@@ -558,6 +533,10 @@ private fun TokenInline(message: MessageUi, sessionTokens: Int) {
         )
     }
 }
+
+
+
+
 
 
 

@@ -1,6 +1,7 @@
-﻿package com.example.deepseekclone.ui.common
+package com.example.deepseekclone.ui.common
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -9,9 +10,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.deepseekclone.R
@@ -151,3 +154,22 @@ fun SendCircleGlyph(
         drawLine(arrowColor, Offset(cx + headX, headY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
     }
 }
+
+/** 用用户提供的 SVG（已转 VectorDrawable）渲染，统一 22dp 画框并按比例缩放 */
+@Composable
+fun SvgIcon(
+    @androidx.annotation.DrawableRes resId: Int,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 22.dp,
+) {
+    Image(
+        painter = painterResource(id = resId),
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        colorFilter = ColorFilter.tint(tint),
+        modifier = modifier.size(size),
+    )
+}
+
+

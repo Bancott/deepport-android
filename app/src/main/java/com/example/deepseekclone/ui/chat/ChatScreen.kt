@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.R
 import com.example.deepseekclone.ui.common.CircleIconButton
 import com.example.deepseekclone.ui.common.DeepSeekTopBar
-import com.example.deepseekclone.ui.common.NewChatGlyph
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DeepSeekTheme
 import com.example.deepseekclone.ui.theme.DsDimen
 import com.example.deepseekclone.ui.theme.DsText
@@ -110,7 +110,7 @@ fun ChatScreen(
                 contentDescription = "新建对话",
                 onClick = onNewChatClick,
             ) {
-                NewChatGlyph(color = colors.textPrimary)
+                SvgIcon(R.drawable.ic_action_new_chat, tint = colors.textPrimary, size = 24.dp)
             }
         }
 
@@ -263,4 +263,5 @@ private fun ChatVoiceLightPreview() {
 private val DisclaimerBlockTopPadding = 3.dp
 private val DisclaimerBlockBottomPadding = 10.dp
 private val DisclaimerBlockHeight = 27.dp
+
 
