@@ -169,26 +169,40 @@ fun PushDrawerLayout(
             ) {
                 drawer(Modifier.fillMaxSize())
 
-                // 卡片投在历史界面上的阴影：紧贴接缝最深(右)，向左淡出。
-                // 阴影必须画在卡片外侧，画到卡片里就成了"压进去"的效果。
-                if (pageLifted.value) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxHeight()
-                            .width(20.dp)
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        Color.Transparent,
-                                        Color.Black.copy(alpha = 0.12f * progress),
-                                    ),
-                                ),
-                            ),
-                    )
-                }
             }
 
+            // 2a. 阴影层：与卡片完全同一变换，只画一条紧贴卡片左缘的渐变。
+            // 画在卡片外侧（左侧），这样不存在"卡片内被压暗"或"底部多一层"的问题。
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val pageP = progress.pow(LAG_POWER)
+                        translationX = (drawerWidthPx - 11.5.dp.toPx()) * pageP
+                        val s = 1f - 0.06f * pageP
+                        scaleX = s
+                        scaleY = s
+                        transformOrigin = TransformOrigin(1f, 0.5f)
+                        rotationY = -8f * pageP
+                        cameraDistance = cameraDistancePx
+                    },
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .offset(x = (-22).dp)
+                        .fillMaxHeight()
+                        .width(22.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.14f * progress),
+                                ),
+                            ),
+                        ),
+                )
+            }
             /* ---------- 2. 会话页（上层卡片） ---------- */
             // 不做投影：卡片外侧露出的就是历史界面本身，保证全屏只有两种颜色。
             Box(
@@ -248,6 +262,8 @@ fun PushDrawerLayout(
         }
     }
 }
+
+
 
 
 
