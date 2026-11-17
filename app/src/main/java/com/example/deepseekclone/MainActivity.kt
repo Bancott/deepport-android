@@ -1,9 +1,10 @@
-﻿package com.example.deepseekclone
+package com.example.deepseekclone
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,11 +13,17 @@ import androidx.compose.runtime.setValue
 import com.example.deepseekclone.ui.chat.ChatRole
 import com.example.deepseekclone.ui.chat.ChatScreen
 import com.example.deepseekclone.ui.chat.ChatUiState
+import com.example.deepseekclone.ui.chat.ConversationDrawer
+import com.example.deepseekclone.ui.chat.ConversationGroup
+import com.example.deepseekclone.ui.chat.ConversationUi
+import com.example.deepseekclone.ui.chat.DrawerUiState
 import com.example.deepseekclone.ui.chat.GenerationState
 import com.example.deepseekclone.ui.chat.InputMode
 import com.example.deepseekclone.ui.chat.MessageStatus
 import com.example.deepseekclone.ui.chat.MessageUi
+import com.example.deepseekclone.ui.chat.PushDrawerLayout
 import com.example.deepseekclone.ui.chat.TokenUsage
+import com.example.deepseekclone.ui.settings.SettingsScreen
 import com.example.deepseekclone.ui.theme.DeepSeekTheme
 
 class MainActivity : ComponentActivity() {
@@ -25,90 +32,165 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             DeepSeekTheme {
-                ChatDemo()
+                App()
             }
         }
     }
 }
 
+private enum class Screen { Chat, Settings }
+
 /**
- * 第一阶段可视化宿主：用 remember 托管状态，覆盖 7 种消息状态。
- * 接入 ChatViewModel(StateFlow) 后整体替换。
+ * 第一阶段可视化宿主：抽屉 + 聊天页 + 设置页跳转。
+ * 后续接入 ChatViewModel(StateFlow) 与 Navigation-Compose 后整体替换。
  */
 @Composable
-private fun ChatDemo() {
-    var state by remember { mutableStateOf(ChatUiState(title = "复刻 DeepSeek 安卓架构", messages = demoConversation(), sessionTokens = 1732)) }
+private fun App() {
+    var screen by remember { mutableStateOf(Screen.Chat) }
+    var drawerOpen by remember { mutableStateOf(false) }
+    var chat by remember {
+        mutableStateOf(
+            ChatUiState(
+                title = "复刻 DeepSeek 安卓架构",
+                messages = demoConversation(),
+                sessionTokens = 1732,
+            ),
+        )
+    }
+    var drawer by remember { mutableStateOf(DrawerUiState(groups = demoConversations())) }
     var counter by remember { mutableStateOf(0) }
 
-    ChatScreen(
-        state = state,
-        onNewChatClick = {
-            state = ChatUiState(greeting = "嗨！今天想聊些什么？")
-        },
-        onToggleSpeechOutput = {
-            state = state.copy(isSpeechOutputOn = !state.isSpeechOutputOn)
-        },
-        onTextChange = { text -> state = state.copy(input = state.input.copy(text = text)) },
-        onToggleDeepThinking = {
-            state = state.copy(input = state.input.copy(deepThinking = !state.input.deepThinking))
-        },
-        onToggleSmartSearch = {
-            state = state.copy(input = state.input.copy(smartSearch = !state.input.smartSearch))
-        },
-        onToggleInputMode = {
-            val next = if (state.input.mode == InputMode.Text) InputMode.Voice else InputMode.Text
-            state = state.copy(input = state.input.copy(mode = next))
-        },
-        onDismissTranscribedNotice = {
-            state = state.copy(input = state.input.copy(transcribedNotice = null))
-        },
-        onSend = {
-            if (state.input.canSend) {
-                counter += 1
-                val text = state.input.text
-                state = state.copy(
-                    title = if (state.title.isBlank()) "新对话" else state.title,
-                    generation = GenerationState.Connecting,
-                    input = state.input.copy(text = "", transcribedNotice = null),
-                    messages = state.messages + listOf(
-                        MessageUi(
-                            id = "u-$counter",
-                            role = ChatRole.User,
-                            text = text,
-                            status = MessageStatus.Sent,
-                        ),
-                        MessageUi(
-                            id = "a-$counter",
-                            role = ChatRole.Assistant,
-                            status = MessageStatus.Connecting,
-                        ),
-                    ),
+    when (screen) {
+        Screen.Settings -> SettingsScreen(
+            versionName = "0.1.0(1)",
+            modelLabel = "deepseek-reasoner",
+            isSystemDark = isSystemInDarkTheme(),
+            onBack = { screen = Screen.Chat },
+        )
+
+        Screen.Chat -> PushDrawerLayout(
+            drawerOpen = drawerOpen,
+            onDismiss = { drawerOpen = false },
+            drawer = { modifier ->
+                ConversationDrawer(
+                    state = drawer,
+                    modifier = modifier,
+                    onSearchClick = { },
+                    onConversationClick = { drawerOpen = false },
+                    onLongPress = { conversation ->
+                        drawer = drawer.copy(
+                            groups = drawer.groups.map { group ->
+                                group.copy(items = group.items.filterNot { it.id == conversation.id })
+                            },
+                        )
+                    },
+                    onPin = { conversation ->
+                        drawer = drawer.copy(
+                            groups = drawer.groups.map { group ->
+                                group.copy(
+                                    items = group.items.map {
+                                        if (it.id == conversation.id) it.copy(pinned = !it.pinned) else it
+                                    },
+                                )
+                            },
+                        )
+                    },
+                    onToggleMultiSelect = { drawer = drawer.copy(multiSelect = true) },
+                    onToggleSelect = { conversation ->
+                        drawer = drawer.copy(
+                            selectedIds = if (conversation.id in drawer.selectedIds) {
+                                drawer.selectedIds - conversation.id
+                            } else {
+                                drawer.selectedIds + conversation.id
+                            },
+                        )
+                    },
+                    onExitMultiSelect = { drawer = drawer.copy(multiSelect = false, selectedIds = emptySet()) },
+                    onPinSelected = { drawer = drawer.copy(multiSelect = false, selectedIds = emptySet()) },
+                    onDeleteSelected = {
+                        val ids = drawer.selectedIds
+                        drawer = drawer.copy(
+                            multiSelect = false,
+                            selectedIds = emptySet(),
+                            groups = drawer.groups.map { group ->
+                                group.copy(items = group.items.filterNot { it.id in ids })
+                            },
+                        )
+                    },
+                    onFooterClick = {
+                        drawerOpen = false
+                        screen = Screen.Settings
+                    },
                 )
-            }
-        },
-        onStop = {
-            state = state.copy(
-                generation = GenerationState.Idle,
-                messages = state.messages.map {
-                    if (it.status == MessageStatus.Connecting || it.status == MessageStatus.Streaming) {
-                        it.copy(status = MessageStatus.Aborted)
-                    } else {
-                        it
+            },
+        ) {
+            ChatScreen(
+                state = chat,
+                onMenuClick = { drawerOpen = true },
+                onNewChatClick = { chat = ChatUiState(greeting = "嗨！今天想聊些什么？") },
+                onToggleSpeechOutput = {
+                    chat = chat.copy(isSpeechOutputOn = !chat.isSpeechOutputOn)
+                },
+                onTextChange = { text -> chat = chat.copy(input = chat.input.copy(text = text)) },
+                onToggleDeepThinking = {
+                    chat = chat.copy(input = chat.input.copy(deepThinking = !chat.input.deepThinking))
+                },
+                onToggleSmartSearch = {
+                    chat = chat.copy(input = chat.input.copy(smartSearch = !chat.input.smartSearch))
+                },
+                onToggleInputMode = {
+                    val next = if (chat.input.mode == InputMode.Text) InputMode.Voice else InputMode.Text
+                    chat = chat.copy(input = chat.input.copy(mode = next))
+                },
+                onDismissTranscribedNotice = {
+                    chat = chat.copy(input = chat.input.copy(transcribedNotice = null))
+                },
+                onSend = {
+                    if (chat.input.canSend) {
+                        counter += 1
+                        val text = chat.input.text
+                        chat = chat.copy(
+                            title = if (chat.title.isBlank()) "新对话" else chat.title,
+                            generation = GenerationState.Connecting,
+                            input = chat.input.copy(text = "", transcribedNotice = null),
+                            messages = chat.messages + listOf(
+                                MessageUi(
+                                    id = "u-$counter",
+                                    role = ChatRole.User,
+                                    text = text,
+                                    status = MessageStatus.Sent,
+                                ),
+                                MessageUi(
+                                    id = "a-$counter",
+                                    role = ChatRole.Assistant,
+                                    status = MessageStatus.Connecting,
+                                ),
+                            ),
+                        )
                     }
                 },
-            )
-        },
-        onToggleReasoning = { message ->
-            state = state.copy(
-                messages = state.messages.map {
-                    if (it.id == message.id) it.copy(reasoningExpanded = !it.reasoningExpanded) else it
+                onStop = {
+                    chat = chat.copy(
+                        generation = GenerationState.Idle,
+                        messages = chat.messages.map {
+                            if (it.status == MessageStatus.Connecting || it.status == MessageStatus.Streaming) {
+                                it.copy(status = MessageStatus.Aborted)
+                            } else {
+                                it
+                            }
+                        },
+                    )
+                },
+                onToggleReasoning = { message ->
+                    chat = chat.copy(
+                        messages = chat.messages.map {
+                            if (it.id == message.id) it.copy(reasoningExpanded = !it.reasoningExpanded) else it
+                        },
+                    )
                 },
             )
-        },
-        onRegenerate = {
-            state = state.copy(messages = state.messages)
-        },
-    )
+        }
+    }
 }
 
 /* ------------------------------- Demo 数据 ------------------------------- */
@@ -190,3 +272,28 @@ private fun demoConversation(): List<MessageUi> = listOf(
     ),
 )
 
+private fun demoConversations(): List<ConversationGroup> = listOf(
+    ConversationGroup(
+        label = "今天",
+        items = listOf(
+            ConversationUi("c1", "复刻 DeepSeek 安卓架构", "今天"),
+            ConversationUi("c2", "其他模型 API 配置方法", "今天"),
+            ConversationUi("c3", "Bancott 用户名评价", "今天"),
+            ConversationUi("c4", "MFC 含义解析", "今天"),
+            ConversationUi("c5", "二进制解码排序解释", "今天"),
+            ConversationUi("c6", "王者英雄语音查看", "今天"),
+        ),
+    ),
+    ConversationGroup(
+        label = "昨天",
+        items = listOf(
+            ConversationUi("c7", "GitHub 新功能解析", "昨天"),
+            ConversationUi("c8", "罗荣铸生日尺牍范文", "昨天"),
+            ConversationUi("c9", "Bancott 含义解析", "昨天"),
+            ConversationUi("c10", "Zotero 导出参考文献", "昨天"),
+            ConversationUi("c11", "百度地图 BD09 坐标系", "昨天"),
+            ConversationUi("c12", "香农熵解释", "昨天"),
+            ConversationUi("c13", "组会汇报急救指南", "昨天"),
+        ),
+    ),
+)
