@@ -1,0 +1,65 @@
+package com.example.deepseekclone.data
+
+import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
+/**
+ * 本地配置存储（Data 层最小实现）。
+ * 后续换成 DataStore / Room 时，只替换这里，UI 不用动。
+ */
+class SettingsStore(context: Context) {
+
+    private val prefs = context.applicationContext
+        .getSharedPreferences("ds_settings", Context.MODE_PRIVATE)
+
+    var apiKey by mutableStateOf(prefs.getString(KEY_API, "").orEmpty())
+        private set
+
+    var baseUrl by mutableStateOf(
+        prefs.getString(KEY_BASE, DEFAULT_BASE).orEmpty().ifBlank { DEFAULT_BASE },
+    )
+        private set
+
+    var model by mutableStateOf(
+        prefs.getString(KEY_MODEL, DEFAULT_MODEL).orEmpty().ifBlank { DEFAULT_MODEL },
+    )
+        private set
+
+    fun updateApiKey(value: String) {
+        apiKey = value
+        persist()
+    }
+
+    fun updateBaseUrl(value: String) {
+        baseUrl = value
+        persist()
+    }
+
+    fun updateModel(value: String) {
+        model = value
+        persist()
+    }
+
+    private fun persist() {
+        prefs.edit()
+            .putString(KEY_API, apiKey)
+            .putString(KEY_BASE, baseUrl)
+            .putString(KEY_MODEL, model)
+            .apply()
+    }
+
+    companion object {
+        const val DEFAULT_BASE = "https://api.deepseek.com"
+        const val DEFAULT_MODEL = "deepseek-reasoner"
+        val MODELS = listOf(
+            "deepseek-chat" to "通用对话（V3）",
+            "deepseek-reasoner" to "深度思考（R1）",
+        )
+
+        private const val KEY_API = "api_key"
+        private const val KEY_BASE = "base_url"
+        private const val KEY_MODEL = "model"
+    }
+}

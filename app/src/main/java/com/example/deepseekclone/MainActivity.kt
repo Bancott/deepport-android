@@ -23,6 +23,8 @@ import com.example.deepseekclone.ui.chat.MessageStatus
 import com.example.deepseekclone.ui.chat.MessageUi
 import com.example.deepseekclone.ui.chat.PushDrawerLayout
 import com.example.deepseekclone.ui.chat.TokenUsage
+import com.example.deepseekclone.data.SettingsStore
+import com.example.deepseekclone.ui.settings.ModelSettingsScreen
 import com.example.deepseekclone.ui.settings.SettingsScreen
 import com.example.deepseekclone.ui.theme.DeepSeekTheme
 
@@ -38,7 +40,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Chat, Settings }
+private enum class Screen { Chat, Settings, Model }
 
 /**
  * 第一阶段可视化宿主：抽屉 + 聊天页 + 设置页跳转。
@@ -46,6 +48,8 @@ private enum class Screen { Chat, Settings }
  */
 @Composable
 private fun App() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val store = remember { SettingsStore(context) }
     var screen by remember { mutableStateOf(Screen.Chat) }
     var drawerOpen by remember { mutableStateOf(false) }
     var chat by remember {
@@ -61,11 +65,17 @@ private fun App() {
     var counter by remember { mutableStateOf(0) }
 
     when (screen) {
+        Screen.Model -> ModelSettingsScreen(
+            store = store,
+            onBack = { screen = Screen.Settings },
+        )
+
         Screen.Settings -> SettingsScreen(
             versionName = "0.1.0(1)",
-            modelLabel = "deepseek-reasoner",
+            modelLabel = store.model,
             isSystemDark = isSystemInDarkTheme(),
             onBack = { screen = Screen.Chat },
+            onModel = { screen = Screen.Model },
         )
 
         Screen.Chat -> PushDrawerLayout(
@@ -297,4 +307,5 @@ private fun demoConversations(): List<ConversationGroup> = listOf(
         ),
     ),
 )
+
 

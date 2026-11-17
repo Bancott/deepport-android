@@ -1,7 +1,7 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -15,31 +15,42 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.deepseekclone.ui.theme.DsTheme
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
+private const val LAG_POWER = 2.2f
+
+/** 手指位移 → 露出比例的换算长度：约 200dp 行程即可全开 */
+private const val DRAG_SPAN_RATIO = 0.5f
+
+/** 快速甩动的速度阈值（px/s），超过则不看距离直接朝该方向吸附 */
+private const val FLING_VELOCITY = 700f
+
 /**
- * 官方抽屉动画（推页式）。层级关系：**抽屉在最底，会话页作为卡片浮在上面**。
+ * 官方抽屉动画（推页式）。层级：**抽屉在底层，会话页作为卡片浮在上面**。
  *
- * 打开时：
- * - 抽屉从左侧滑入（-W → 0），跟手 1:1；
- * - 会话页右移、缩小到 0.93、内容淡到 38%，四角切 20dp 圆角，左缘一条 1dp 高光；
- * - 页面位移用 p^2.2，比抽屉"慢半拍"，所以抽屉看起来是从页面身后露出来的。
- *
- * 手势：页面任意位置右滑打开、左滑关闭、点击露出的页面区域关闭。
+ * - 抽屉从左侧滑入（-W → 0）；
+ * - 会话页右移、缩小到 0.93、内容淡到 38%、20dp 圆角、左缘 1dp 高光；
+ * - 页面位移用 p^2.2（比抽屉慢半拍），抽屉像是从页面身后露出来；
+ * - 松手吸附：**速度优先**（快速甩动按方向切换），否则看谁占的面积大。
  */
 @Composable
 fun PushDrawerLayout(
@@ -51,14 +62,25 @@ fun PushDrawerLayout(
     content: @Composable () -> Unit,
 ) {
     val colors = DsTheme.colors
-    val progress = remember { Animatable(if (drawerOpen) 1f else 0f) }
+    var progress by remember { mutableFloatStateOf(if (drawerOpen) 1f else 0f) }
     val scope = rememberCoroutineScope()
+    val velocityTracker = remember { VelocityTracker() }
+    var animJob by remember { mutableStateOf<Job?>(null) }
 
+    fun animateProgressTo(target: Float, duration: Int = 280) {
+        animJob?.cancel()
+        animJob = scope.launch {
+            animate(
+                initialValue = progress,
+                targetValue = target,
+                animationSpec = tween(durationMillis = duration, easing = FastOutSlowInEasing),
+            ) { value, _ -> progress = value }
+        }
+    }
+
+    // 外部状态变化（点菜单按钮）时补动画
     LaunchedEffect(drawerOpen) {
-        progress.animateTo(
-            targetValue = if (drawerOpen) 1f else 0f,
-            animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-        )
+        animateProgressTo(if (drawerOpen) 1f else 0f)
     }
 
     BoxWithConstraints(
@@ -70,48 +92,56 @@ fun PushDrawerLayout(
         val drawerWidth = maxWidth * drawerWidthFraction
         val drawerWidthPx = with(density) { drawerWidth.toPx() }
         val screenWidthPx = with(density) { maxWidth.toPx() }
-        val lagPower = 2.2f
-
-        fun settle(open: Boolean) {
-            onDrawerOpenChange(open)
-            scope.launch {
-                progress.animateTo(
-                    targetValue = if (open) 1f else 0f,
-                    animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
-                )
-            }
-        }
+        val dragSpanPx = screenWidthPx * DRAG_SPAN_RATIO
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(drawerOpen, drawerWidthPx) {
+                .pointerInput(drawerOpen, dragSpanPx) {
                     var dragging = false
+
+                    fun settle(open: Boolean) {
+                        val stateChanged = drawerOpen != open
+                        onDrawerOpenChange(open)
+                        if (!stateChanged) {
+                            // 状态没变时 LaunchedEffect 不会触发，这里手动收尾
+                            animateProgressTo(if (open) 1f else 0f, duration = 240)
+                        }
+                    }
+
+                    fun shouldOpen(): Boolean {
+                        val vx = velocityTracker.calculateVelocity().x
+                        return when {
+                            vx > FLING_VELOCITY -> true
+                            vx < -FLING_VELOCITY -> false
+                            else -> progress.pow(LAG_POWER) > 0.5f
+                        }
+                    }
+
                     detectHorizontalDragGestures(
-                        onDragStart = { dragging = true },
+                        onDragStart = {
+                            dragging = true
+                            animJob?.cancel()
+                            velocityTracker.resetTracking()
+                        },
                         onHorizontalDrag = { change, dragAmount ->
                             if (dragging) {
                                 change.consume()
-                                // 手指直接控制"露出的屏幕宽度比例"，再由它反推动画进度，
-                                // 这样拖拽距离和视觉上的分割位置是 1:1 的。
-                                val revealed = progress.value.pow(lagPower) +
-                                    dragAmount / (screenWidthPx * 0.5f)
-                                scope.launch {
-                                    progress.snapTo(
-                                        revealed.coerceIn(0f, 1f).pow(1f / lagPower),
-                                    )
-                                }
+                                velocityTracker.addPosition(change.uptimeMillis, change.position)
+                                // 手指位移按增益映射到"露出比例"，再反推动画进度
+                                val revealed = progress.pow(LAG_POWER) + dragAmount / dragSpanPx
+                                progress = revealed.coerceIn(0f, 1f).pow(1f / LAG_POWER)
                             }
                         },
                         onDragEnd = {
                             if (dragging) {
                                 dragging = false
-                                settle(progress.value.pow(lagPower) > 0.5f)
+                                settle(shouldOpen())
                             }
                         },
                         onDragCancel = {
                             dragging = false
-                            settle(progress.value.pow(lagPower) > 0.5f)
+                            settle(progress.pow(LAG_POWER) > 0.5f)
                         },
                     )
                 },
@@ -122,23 +152,23 @@ fun PushDrawerLayout(
                     .width(drawerWidth)
                     .fillMaxHeight()
                     .offset {
-                        IntOffset((-drawerWidthPx + drawerWidthPx * progress.value).roundToInt(), 0)
+                        IntOffset((-drawerWidthPx + drawerWidthPx * progress).roundToInt(), 0)
                     },
             ) {
                 drawer(Modifier.fillMaxSize())
             }
 
-            /* ---------- 2. 会话页（上层卡片，随推页右移 + 缩小 + 变淡） ---------- */
+            /* ---------- 2. 会话页（上层卡片） ---------- */
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        val pageP = progress.value.pow(2.2f)
+                        val pageP = progress.pow(LAG_POWER)
                         translationX = drawerWidthPx * pageP
                         val s = 1f - 0.07f * pageP
                         scaleX = s
                         scaleY = s
-                        if (progress.value > 0.01f) {
+                        if (progress > 0.01f) {
                             clip = true
                             shape = RoundedCornerShape(20.dp)
                         }
@@ -149,36 +179,34 @@ fun PushDrawerLayout(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            val pageP = progress.value.pow(2.2f)
+                            val pageP = progress.pow(LAG_POWER)
                             alpha = 1f - 0.62f * pageP
                         },
                 ) {
                     content()
                 }
 
-                // 卡片左缘 1dp 高光（官方截图 ≈ #2B2B2B），强化"浮起的一层"
-                if (progress.value > 0.01f) {
+                // 卡片左缘 1dp 高光（官方 ≈ #2B2B2B）
+                if (progress > 0.01f) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
                             .fillMaxHeight()
                             .width(1.dp)
-                            .background(Color.White.copy(alpha = 0.07f * progress.value)),
+                            .background(Color.White.copy(alpha = 0.07f * progress)),
                     )
                 }
             }
 
             /* ---------- 3. 点击露出的页面区域关闭 ---------- */
-            if (progress.value > 0.01f) {
+            if (progress > 0.01f) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .offset { IntOffset((drawerWidthPx * progress.value).roundToInt(), 0) }
+                        .offset { IntOffset((drawerWidthPx * progress).roundToInt(), 0) }
                         .clickable { onDrawerOpenChange(false) },
                 )
             }
         }
     }
 }
-
-
