@@ -3,7 +3,8 @@ package com.example.deepseekclone.ui.chat
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.deepseekclone.data.ChatMessage
+import com.example.deepseekclone.data.ApiFile
+import com.example.deepseekclone.data.ApiMessage
 import com.example.deepseekclone.data.ChatRepository
 import com.example.deepseekclone.data.ChatStore
 import com.example.deepseekclone.data.ConversationStore
@@ -60,6 +61,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private var streamJob: Job? = null
+
+    /** 附件路径 → files API 的 file_id，避免同一文件重复上传 */
+    private val uploadedFileIds = HashMap<String, String>()
 
     init {
         // 一次性迁移：老版本把单会话存在 ChatStore（ds_chat.xml）里
@@ -315,26 +319,23 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * 录音转写：走 OpenAI 兼容的 /audio/transcriptions（设置里单独配，未配置就明确提示）。
-     * 成功把文字回填到输入框，失败给出可读原因。
+     * 录音转写：官方 ASR（POST {origin}/v1/tools/asr，WAV 16k 单声道）。
+     * 成功把文字回填输入框，失败给出可读原因。
      */
     fun transcribeAudio(file: java.io.File) {
         if (_state.value.input.transcribing) {
             file.delete()
             return
         }
-        val baseUrl = settings.asrBaseUrl
-        val model = settings.asrModel
-        if (baseUrl.isBlank() || model.isBlank()) {
+        if (settings.apiKey.isBlank()) {
             file.delete()
-            failTranscription("未配置语音识别服务：设置 → 模型设置 → 语音识别")
+            failTranscription("请先在「设置 → 模型设置」填写 API Key")
             return
         }
-        val key = settings.asrApiKey.ifBlank { settings.apiKey }
         setTranscribing(true)
         viewModelScope.launch {
             val result = runCatching {
-                withContext(Dispatchers.IO) { repository.transcribe(baseUrl, key, model, file) }
+                repository.transcribe(settings.baseUrl, settings.apiKey, file)
             }
             runCatching { file.delete() }
             result
@@ -346,7 +347,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         applyTranscription(clean)
                     }
                 }
-                .onFailure { failTranscription(it.message ?: "语音识别失败，请检查服务配置") }
+                .onFailure { failTranscription(it.message ?: "语音识别失败，请检查网络") }
         }
     }
 
@@ -503,29 +504,53 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private fun startStream(assistantId: String, parentKey: String) {
         val apiKey = settings.apiKey
         val model = settings.model
-        val baseUrl = settings.baseUrl
         if (apiKey.isBlank() || model.isBlank()) {
             fail(assistantId, "请先在「设置 → 模型设置」填写 API Key 并选择模型")
             return
         }
-        val history = historyTo(parentKey).map {
-            ChatMessage(role = if (it.role == ChatRole.User) "user" else "assistant", content = promptFor(it))
-        }
-        val effort = if (_state.value.input.deepThinking) "max" else "low"
+        val history = historyTo(parentKey)
+        val thinking = _state.value.input.deepThinking
         val enableSearch = _state.value.input.smartSearch
 
         streamJob = viewModelScope.launch {
-            streamInto(assistantId, baseUrl, apiKey, model, history, effort, enableSearch)
+            // 附件先走 files API 换成 file_id，再拼进消息
+            val messages = withContext(Dispatchers.IO) { buildApiMessages(history) }
+            streamInto(assistantId, messages, thinking, enableSearch)
+        }
+    }
+
+    /** 会话树 → Anthropic 消息：附件上传成 file_id，图片用 image 块、其余用 document 块 */
+    private suspend fun buildApiMessages(history: List<MessageUi>): List<ApiMessage> {
+        val base = settings.baseUrl
+        val apiKey = settings.apiKey
+        return history.map { message ->
+            val files = message.attachments.mapNotNull { attachment ->
+                val path = attachment.path ?: return@mapNotNull null
+                val cached = uploadedFileIds[path]
+                val id = cached ?: run {
+                    val fileId = repository.upload(
+                        baseUrl = base,
+                        apiKey = apiKey,
+                        file = java.io.File(path),
+                        name = attachment.displayName,
+                    ) ?: return@mapNotNull null
+                    uploadedFileIds[path] = fileId
+                    fileId
+                }
+                ApiFile(id = id, isImage = attachment.isImage)
+            }
+            ApiMessage(
+                role = if (message.role == ChatRole.User) "user" else "assistant",
+                text = message.text,
+                files = files,
+            )
         }
     }
 
     private suspend fun streamInto(
         assistantId: String,
-        baseUrl: String,
-        apiKey: String,
-        model: String,
-        history: List<ChatMessage>,
-        effort: String,
+        history: List<ApiMessage>,
+        thinking: Boolean,
         enableSearch: Boolean,
     ) {
         val startedAt = System.currentTimeMillis()
@@ -558,13 +583,13 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
         try {
             repository.streamChat(
-                baseUrl = baseUrl,
-                apiKey = apiKey,
-                model = model,
+                baseUrl = settings.baseUrl,
+                apiKey = settings.apiKey,
+                model = settings.model,
                 messages = history,
-                // 深度思考开关 → effort：开=max，关=low
-                effort = effort,
-                // 智能搜索开关 → 请求体带 search
+                // 深度思考开关 → thinking.type
+                thinking = thinking,
+                // 智能搜索开关 → tools[deepseek_web_search]
                 enableSearch = enableSearch,
             ).collect { event ->
                 when (event) {
