@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -62,7 +63,7 @@ fun PushDrawerLayout(
     drawerOpen: Boolean,
     onDrawerOpenChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    drawerWidthFraction: Float = 0.80f,
+    drawerWidthFraction: Float = 0.825f,
     drawer: @Composable (Modifier) -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -175,7 +176,7 @@ fun PushDrawerLayout(
                             .width(30.dp)
                             .background(
                                 Brush.horizontalGradient(
-                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.035f)),
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.015f)),
                                 ),
                             ),
                     )
@@ -188,17 +189,21 @@ fun PushDrawerLayout(
                     .fillMaxSize()
                     .graphicsLayer {
                         val pageP = progress.pow(LAG_POWER)
-                        translationX = drawerWidthPx * pageP
+                        // 让页面左缘正好压在抽屉右缘上（330dp），中间不留一条底色缝
+                        translationX = (drawerWidthPx - 10.dp.toPx()) * pageP
                         val s = 1f - 0.052f * pageP
                         scaleX = s
                         scaleY = s
                     }
                     .shadow(
-                        elevation = 16.dp,
+                        elevation = 8.dp,
                         shape = RoundedCornerShape(20.dp),
                         clip = false,
                     )
-                    .clip(RoundedCornerShape(20.dp))
+                    // 只在抽屉打开时裁圆角；关闭状态保持直角，避免四角露出底色
+                    .then(
+                        if (pageLifted.value) Modifier.clip(RoundedCornerShape(20.dp)) else Modifier,
+                    )
                     .background(colors.pushedPage),
             ) {
                 Box(
@@ -230,12 +235,20 @@ fun PushDrawerLayout(
                     modifier = Modifier
                         .fillMaxSize()
                         .offset { IntOffset((drawerWidthPx * progress).roundToInt(), 0) }
-                        .clickable { onDrawerOpenChange(false) },
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onDrawerOpenChange(false) },
                 )
             }
         }
     }
 }
+
+
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import com.example.deepseekclone.R
 
@@ -75,6 +75,8 @@ fun DsInputBar(
 ) {
     val colors = DsTheme.colors
     Surface(
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = DsDimen.InputHorizontalPadding),
@@ -337,6 +339,7 @@ private fun SendOrStopButton(
         }
     }
 }
+
 
 
 
