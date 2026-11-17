@@ -2,9 +2,12 @@ package com.example.deepseekclone.data
 
 import com.example.deepseekclone.ui.chat.SourceItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -360,12 +363,7 @@ class DeepSeekApi {
     /** 语音合成：返回裸 PCM（24kHz / 单声道 / 16bit 小端） */
     fun synthesize(origin: String, apiKey: String, text: String, voice: String): ByteArray {
         val url = trimOrigin(origin) + "/v1/tools/tts"
-        val body = JSONObject().apply {
-            put("text", text)
-            put("voice_id", voice)
-            put("format", "pcm")
-            put("filter_markdown", true)
-        }.toString()
+        val body = ttsBody(text, voice)
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
@@ -386,6 +384,58 @@ class DeepSeekApi {
             conn.disconnect()
         }
     }
+
+    /**
+     * 流式合成：逐块产出裸 PCM（24kHz / 单声道 / 16bit 小端），首块到达即可出声。
+     * 上游在 IO 线程读 socket，下游按背压消费；取消时立刻断开连接，避免读阻塞拖住停止操作。
+     */
+    fun synthesizeStream(
+        origin: String,
+        apiKey: String,
+        text: String,
+        voice: String,
+    ): Flow<ByteArray> = flow {
+        val url = trimOrigin(origin) + "/v1/tools/tts"
+        val body = ttsBody(text, voice)
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            connectTimeout = 20_000
+            readTimeout = 180_000
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Authorization", "Bearer $apiKey")
+        }
+        try {
+            conn.outputStream.use { it.write(body.toByteArray()) }
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                val err = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                throw IllegalStateException(describeError(code, err))
+            }
+            currentCoroutineContext()[Job]?.invokeOnCompletion { runCatching { conn.disconnect() } }
+            conn.inputStream.use { input ->
+                val buffer = ByteArray(16 * 1024)
+                var total = 0L
+                while (currentCoroutineContext().isActive) {
+                    val read = input.read(buffer)
+                    if (read <= 0) break
+                    total += read
+                    emit(buffer.copyOf(read))
+                }
+                android.util.Log.i("DeepSeekApi", "tts stream end: total=$total active=${currentCoroutineContext().isActive}")
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }.flowOn(Dispatchers.IO)
+
+    private fun ttsBody(text: String, voice: String): String = JSONObject().apply {
+        put("text", text)
+        put("voice_id", voice)
+        put("format", "pcm")
+        // 服务端负责过滤 markdown 代码块/表格/引用，正文原样提交即可
+        put("filter_markdown", true)
+    }.toString()
 
     /* ------------------------------ 工具 ------------------------------ */
 

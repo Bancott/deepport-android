@@ -161,6 +161,8 @@ fun ChatScreen(
                     MessageStream(
                         messages = state.messages,
                         sessionTokens = state.sessionTokens,
+                        readingMessageId = state.readingMessageId,
+                        readingState = state.readingState,
                         onToggleReasoning = onToggleReasoning,
                         onCopy = onCopyMessage,
                         onSpeak = onSpeakMessage,

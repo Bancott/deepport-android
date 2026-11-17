@@ -46,6 +46,8 @@ data class DsColors(
     val pushedPage: Color,
     /** 附件面板里的大方块按钮底 */
     val tile: Color,
+    /** 朗读音色卡片的底色（两档音色共用，靠柔光渐变区分） */
+    val voiceCard: Color,
 )
 
 val DsLightColors = DsColors(
@@ -73,6 +75,7 @@ val DsLightColors = DsColors(
     drawerSurface = Color(0xFFF8F8F8),
     pushedPage = Color(0xFFFFFFFF),
     tile = Color(0xFFF2F2F2),
+    voiceCard = Color(0xFFE9F0FF),
 )
 
 val DsDarkColors = DsColors(
@@ -100,6 +103,7 @@ val DsDarkColors = DsColors(
     drawerSurface = Color(0xFF0F0F0F),
     pushedPage = Color(0xFF1D1D1D),
     tile = Color(0xFF3C3C3C),
+    voiceCard = Color(0xFF24304A),
 )
 
 

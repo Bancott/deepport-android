@@ -9,9 +9,9 @@ import com.example.deepseekclone.data.ChatRepository
 import com.example.deepseekclone.data.ChatStore
 import com.example.deepseekclone.data.ConversationStore
 import com.example.deepseekclone.data.SettingsStore
-import com.example.deepseekclone.data.Speaker
 import com.example.deepseekclone.data.StreamEvent
 import com.example.deepseekclone.data.StoredConversation
+import com.example.deepseekclone.data.TtsPlayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +42,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val settings = SettingsStore.get(app)
     private val store = ConversationStore(app)
     private val repository = ChatRepository()
-    private val speaker = Speaker(app)
+    private val tts = TtsPlayer()
     private var currentId: String = ""
 
     /** 全部消息节点（插入顺序 = 创建顺序，兄弟节点顺序即分支顺序） */
@@ -65,6 +65,30 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val uploadedFileIds = HashMap<String, String>()
 
     init {
+        // 朗读状态回灌到 UiState（加载/播放/结束），失败原因交给界面 toast
+        viewModelScope.launch {
+            tts.state.collect { state ->
+                val mapped = when (state) {
+                    TtsPlayer.State.Idle -> ReadAloudState.Idle
+                    TtsPlayer.State.Loading -> ReadAloudState.Loading
+                    TtsPlayer.State.Playing -> ReadAloudState.Playing
+                }
+                _state.update {
+                    it.copy(
+                        readingState = mapped,
+                        readingMessageId = if (mapped == ReadAloudState.Idle) null else it.readingMessageId,
+                    )
+                }
+            }
+        }
+        viewModelScope.launch {
+            tts.error.collect { message ->
+                if (message != null) {
+                    _state.update { it.copy(speechError = message) }
+                    tts.clearError()
+                }
+            }
+        }
         // 一次性迁移：老版本把单会话存在 ChatStore（ds_chat.xml）里
         if (store.loadAll().isEmpty()) {
             ChatStore(app).load()?.let { (oldTitle, messages) ->
@@ -120,7 +144,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         if (id == currentId) return
         streamJob?.cancel()
         streamJob = null
-        speaker.stop()
+        tts.stop()
         val target = store.loadAll().firstOrNull { it.id == id } ?: return
         bind(target)
     }
@@ -128,7 +152,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     fun newChat() {
         streamJob?.cancel()
         streamJob = null
-        speaker.stop()
+        tts.stop()
         currentId = store.newId()
         nodes.clear()
         activeChild.clear()
@@ -267,20 +291,42 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleSpeechOutput() {
         val enabled = !_state.value.isSpeechOutputOn
-        if (!enabled) speaker.stop()
+        if (!enabled) tts.stop()
         _state.update { it.copy(isSpeechOutputOn = enabled) }
     }
 
-    /** 动作条的喇叭：朗读这一条回答；没有正文时返回 false 让 UI 给个提示 */
+    /**
+     * 动作条的喇叭：朗读这一条回答；没有正文时返回 false 让 UI 给个提示。
+     * 正在读同一条时再点 = 停止；读别的消息时先停旧的再起新的。
+     */
     fun speakMessage(message: MessageUi): Boolean {
-        val text = Speaker.plainText(message.text)
+        val text = TtsPlayer.plainText(message.text)
         if (text.isBlank()) return false
-        speaker.speak(text)
+        val current = _state.value
+        if (current.readingState != ReadAloudState.Idle) {
+            tts.stop()
+            if (current.readingMessageId == message.id) return true
+        }
+        if (settings.apiKey.isBlank()) {
+            _state.update { it.copy(speechError = "请先在「设置 → 模型设置」填写 API Key") }
+            return true
+        }
+        _state.update { it.copy(readingMessageId = message.id) }
+        tts.play(
+            repository.synthesizeStream(
+                baseUrl = settings.baseUrl,
+                apiKey = settings.apiKey,
+                text = text,
+                voice = settings.ttsVoice,
+            ),
+        )
         return true
     }
 
+    fun dismissSpeechError() = _state.update { it.copy(speechError = null) }
+
     override fun onCleared() {
-        speaker.shutdown()
+        tts.release()
         super.onCleared()
     }
 
@@ -501,6 +547,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     /* ----------------------------- 流式请求 ----------------------------- */
 
     private fun startStream(assistantId: String, parentKey: String) {
+        // 新一轮生成开始，先停掉上一条正在朗读的声音
+        tts.stop()
         val apiKey = settings.apiKey
         val model = settings.model
         if (apiKey.isBlank() || model.isBlank()) {
@@ -700,9 +748,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             persist()
             // 顶栏朗读开关打开时，回答生成完自动读一遍
             if (_state.value.isSpeechOutputOn) {
-                val finished = nodes[assistantId]
-                val text = finished?.let { Speaker.plainText(it.text) }.orEmpty()
-                if (text.isNotBlank()) speaker.speak(text)
+                nodes[assistantId]?.let { speakMessage(it) }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             flush(force = true)

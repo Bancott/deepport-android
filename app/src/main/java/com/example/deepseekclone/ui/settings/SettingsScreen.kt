@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.settings
+package com.example.deepseekclone.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -60,6 +60,7 @@ fun SettingsScreen(
     modelLabel: String,
     themeLabel: String = "跟随系统",
     isSystemDark: Boolean,
+    voiceLabel: String = "海星",
     onBack: () -> Unit,
     onAccount: () -> Unit = {},
     onData: () -> Unit = {},
@@ -141,7 +142,7 @@ fun SettingsScreen(
 
             SectionLabel("语音")
             SettingsGroup {
-                SettingsRow(Icons.Outlined.VolumeUp, "朗读音色", onClick = onVoiceTone)
+                SettingsRow(Icons.Outlined.VolumeUp, "朗读音色", value = voiceLabel, onClick = onVoiceTone)
             }
 
             SectionLabel("关于")

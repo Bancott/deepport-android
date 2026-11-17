@@ -78,4 +78,12 @@ class ChatRepository(
 
     suspend fun synthesize(baseUrl: String, apiKey: String, text: String, voice: String): ByteArray =
         withContext(Dispatchers.IO) { api.synthesize(baseUrl, apiKey, text, voice) }
+
+    /** 朗读用：边下边播的 PCM 流（24kHz / 单声道 / 16bit） */
+    fun synthesizeStream(
+        baseUrl: String,
+        apiKey: String,
+        text: String,
+        voice: String,
+    ): Flow<ByteArray> = api.synthesizeStream(baseUrl, apiKey, text, voice)
 }

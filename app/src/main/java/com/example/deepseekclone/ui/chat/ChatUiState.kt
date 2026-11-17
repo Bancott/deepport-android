@@ -127,6 +127,9 @@ data class InputUiState(
         get() = !transcribing && (text.isNotBlank() || attachments.isNotEmpty())
 }
 
+/** 朗读状态：Idle 未朗读 / Loading 请求合成 / Playing 出声中 */
+enum class ReadAloudState { Idle, Loading, Playing }
+
 /** 聊天页整体 UiState（后续接入 ViewModel 时只暴露这一个对象） */
 data class ChatUiState(
     /** 空会话时官方不显示标题，第一条消息发出后才是"新对话" */
@@ -138,6 +141,11 @@ data class ChatUiState(
     /** 当前 active path 上的累计 token */
     val sessionTokens: Int = 0,
     val isSpeechOutputOn: Boolean = false,
+    /** 正在朗读（或准备朗读）的消息 id；null 表示没有 */
+    val readingMessageId: String? = null,
+    val readingState: ReadAloudState = ReadAloudState.Idle,
+    /** 朗读失败提示，展示后调用 dismissSpeechError() 清掉 */
+    val speechError: String? = null,
 ) {
     val isGenerating: Boolean
         get() = generation == GenerationState.Connecting ||

@@ -238,38 +238,11 @@ fun ModelSettingsScreen(
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
             )
 
-            // 语音识别：按住说话的转写走这个接口（OpenAI 兼容 /audio/transcriptions）
-            SectionLabel("语音识别（可选）")
-            SettingsCard {
-                FieldRow(
-                    title = "Base URL",
-                    value = store.asrBaseUrl,
-                    placeholder = "https://api.openai.com/v1",
-                    masked = false,
-                    onValueChange = store::updateAsrBaseUrl,
-                )
-                Divider()
-                FieldRow(
-                    title = "API Key",
-                    value = store.asrApiKey,
-                    placeholder = "留空复用上面的 Key",
-                    masked = true,
-                    onValueChange = store::updateAsrApiKey,
-                )
-                Divider()
-                FieldRow(
-                    title = "模型",
-                    value = store.asrModel,
-                    placeholder = SettingsStore.DEFAULT_ASR_MODEL,
-                    masked = false,
-                    onValueChange = store::updateAsrModel,
-                )
-            }
             Text(
-                text = "填了这三项，「按住说话」录到的声音会发到该服务转成文字再回填输入框；留空则语音输入会提示未配置。",
+                text = "「按住说话」和「朗读」都用同一个 Key：语音识别走 /v1/tools/asr，语音合成走 /v1/tools/tts。",
                 style = DsText.caption.copy(fontSize = 12.sp),
                 color = colors.textSecondary,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             )
         }
     }

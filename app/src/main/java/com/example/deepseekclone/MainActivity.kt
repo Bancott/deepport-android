@@ -55,6 +55,7 @@ import com.example.deepseekclone.ui.settings.DataScreen
 import com.example.deepseekclone.ui.settings.ModelSettingsScreen
 import com.example.deepseekclone.ui.settings.PersonalizationScreen
 import com.example.deepseekclone.ui.settings.SettingsScreen
+import com.example.deepseekclone.ui.settings.VoiceToneDialog
 import com.example.deepseekclone.ui.theme.DeepSeekTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -119,6 +120,15 @@ private fun App() {
     var showLanguage by remember { mutableStateOf(false) }
     var webTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showCamera by remember { mutableStateOf(false) }
+    var showVoiceTone by remember { mutableStateOf(false) }
+
+    // 朗读失败（Key 未填 / 合成报错）用 toast 提示后清掉，避免重复弹
+    LaunchedEffect(chat.speechError) {
+        chat.speechError?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            vm.dismissSpeechError()
+        }
+    }
 
     val attachmentStore = remember { AttachmentStore(context) }
     val scope = rememberCoroutineScope()
@@ -180,6 +190,13 @@ private fun App() {
             selected = "zh-CN",
             onSelect = { showLanguage = false },
             onDismiss = { showLanguage = false },
+        )
+    }
+    if (showVoiceTone) {
+        VoiceToneDialog(
+            selected = store.ttsVoice,
+            onConfirm = { store.updateTtsVoice(it) },
+            onDismiss = { showVoiceTone = false },
         )
     }
 
@@ -277,6 +294,7 @@ private fun App() {
             modelLabel = store.model.ifBlank { "未配置" },
             themeLabel = AppearanceOptions.firstOrNull { it.first == store.themeMode }?.second ?: "跟随系统",
             isSystemDark = isSystemInDarkTheme(),
+            voiceLabel = SettingsStore.TTS_VOICES.firstOrNull { it.first == store.ttsVoice }?.second ?: "海星",
             onBack = { screen = Screen.Chat },
             onModel = { screen = Screen.Model },
             onAccount = { screen = Screen.Account },
@@ -284,6 +302,7 @@ private fun App() {
             onPersonalization = { screen = Screen.Personalization },
             onFontSize = { screen = Screen.FontSize },
             onLanguage = { showLanguage = true },
+            onVoiceTone = { showVoiceTone = true },
             onAgreement = { webTarget = "https://cdn.deepseek.com/policies/zh-CN/deepseek-terms-of-use.html" to "服务协议" },
             onHelp = { webTarget = "https://chat.deepseek.com/" to "帮助与反馈" },
             onRecharge = { webTarget = "https://platform.deepseek.com/top_up" to "DeepSeek 官方充值" },

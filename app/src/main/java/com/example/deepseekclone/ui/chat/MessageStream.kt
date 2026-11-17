@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.ui.chat.markdown.MarkdownText
 import com.example.deepseekclone.ui.common.GlobeGlyph
+import com.example.deepseekclone.ui.common.ReadingBars
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DsTheme
@@ -76,6 +77,8 @@ fun MessageStream(
     messages: List<MessageUi>,
     sessionTokens: Int,
     modifier: Modifier = Modifier,
+    readingMessageId: String? = null,
+    readingState: ReadAloudState = ReadAloudState.Idle,
     onToggleReasoning: (MessageUi) -> Unit = {},
     onCopy: (MessageUi) -> Unit = {},
     onSpeak: (MessageUi) -> Unit = {},
@@ -119,6 +122,11 @@ fun MessageStream(
                 ChatRole.Assistant -> AssistantMessage(
                     message = message,
                     sessionTokens = sessionTokens,
+                    readingState = if (message.id == readingMessageId) {
+                        readingState
+                    } else {
+                        ReadAloudState.Idle
+                    },
                     onToggleReasoning = { onToggleReasoning(message) },
                     onCopy = { onCopy(message) },
                     onSpeak = { onSpeak(message) },
@@ -182,6 +190,7 @@ private fun UserMessage(message: MessageUi, onEdit: () -> Unit, onSelectText: ()
 private fun AssistantMessage(
     message: MessageUi,
     sessionTokens: Int,
+    readingState: ReadAloudState,
     onToggleReasoning: () -> Unit,
     onCopy: () -> Unit,
     onSpeak: () -> Unit,
@@ -272,6 +281,7 @@ private fun AssistantMessage(
             MessageActionBar(
                 message = message,
                 sessionTokens = sessionTokens,
+                readingState = readingState,
                 onCopy = onCopy,
                 onSpeak = onSpeak,
                 onShare = onShare,
@@ -439,6 +449,7 @@ private fun SourcesPill(count: Int, onClick: () -> Unit) {
 private fun MessageActionBar(
     message: MessageUi,
     sessionTokens: Int,
+    readingState: ReadAloudState,
     onCopy: () -> Unit,
     onSpeak: () -> Unit,
     onShare: () -> Unit,
@@ -496,8 +507,14 @@ private fun MessageActionBar(
             onClick = onCopy,
         )
         ActionIcon(
-            icon = { tint -> SvgIcon(R.drawable.ic_action_volume, tint = tint, size = 21.dp) },
-            label = "朗读",
+            icon = { tint ->
+                if (readingState != ReadAloudState.Idle) {
+                    ReadingBars(state = readingState, color = tint)
+                } else {
+                    SvgIcon(R.drawable.ic_action_volume, tint = tint, size = 21.dp)
+                }
+            },
+            label = if (readingState == ReadAloudState.Idle) "朗读" else "停止朗读",
             onClick = onSpeak,
         )
         ActionIcon(
