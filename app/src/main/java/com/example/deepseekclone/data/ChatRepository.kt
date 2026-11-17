@@ -15,6 +15,8 @@ sealed interface StreamEvent {
     data class Finish(val reason: String) : StreamEvent
     /** 联网搜索来源 */
     data class Sources(val items: List<com.example.deepseekclone.ui.chat.SourceItem>) : StreamEvent
+    /** 服务端补的会话标题（只请求一次） */
+    data class Title(val title: String) : StreamEvent
     data object Done : StreamEvent
 }
 
@@ -34,6 +36,7 @@ class ChatRepository(
         messages: List<ApiMessage>,
         thinking: Boolean,
         enableSearch: Boolean,
+        requestTitle: Boolean,
     ): Flow<StreamEvent> = api.streamMessage(
         origin = baseUrl,
         apiKey = apiKey,
@@ -41,11 +44,13 @@ class ChatRepository(
         messages = messages,
         thinking = thinking,
         search = enableSearch,
+        requestTitle = requestTitle,
     ).map { event ->
         when (event) {
             is ApiEvent.Thinking -> StreamEvent.Reasoning(event.delta)
             is ApiEvent.Text -> StreamEvent.Content(event.delta)
             is ApiEvent.Sources -> StreamEvent.Sources(event.items)
+            is ApiEvent.Title -> StreamEvent.Title(event.title)
             is ApiEvent.Usage -> StreamEvent.Usage(
                 promptTokens = event.input,
                 completionTokens = event.output,
@@ -58,10 +63,15 @@ class ChatRepository(
     }
 
     /** 上传附件拿 file_id（files API），失败返回 null 由上层跳过该附件 */
-    suspend fun upload(baseUrl: String, apiKey: String, file: File, name: String): String? =
-        withContext(Dispatchers.IO) {
-            api.uploadFile(baseUrl, apiKey, file, DeepSeekApi.purposeFor(name))
-        }
+    suspend fun upload(
+        baseUrl: String,
+        apiKey: String,
+        file: File,
+        name: String,
+        isImage: Boolean,
+    ): String? = withContext(Dispatchers.IO) {
+        api.uploadFile(baseUrl, apiKey, file, DeepSeekApi.purposeFor(name, isImage))
+    }
 
     suspend fun transcribe(baseUrl: String, apiKey: String, wav: File): String =
         withContext(Dispatchers.IO) { api.transcribe(baseUrl, apiKey, wav) }

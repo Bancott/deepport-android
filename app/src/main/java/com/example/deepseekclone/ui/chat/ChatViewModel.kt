@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.util.UUID
 
 /** 搜索结果：会话 + 命中片段 */
@@ -511,11 +510,21 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         val history = historyTo(parentKey)
         val thinking = _state.value.input.deepThinking
         val enableSearch = _state.value.input.smartSearch
+        // 第一轮才让服务端补标题（history 已含本轮提问，所以看有没有历史回答）；
+        // 已经手动改过标题就不再请求
+        val requestTitle = history.none { it.role == ChatRole.Assistant } && !titleEdited
 
         streamJob = viewModelScope.launch {
             // 附件先走 files API 换成 file_id，再拼进消息
-            val messages = withContext(Dispatchers.IO) { buildApiMessages(history) }
-            streamInto(assistantId, messages, thinking, enableSearch)
+            val messages = try {
+                withContext(Dispatchers.IO) { buildApiMessages(history) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                fail(assistantId, e.message ?: "附件上传失败，请检查网络后重试")
+                return@launch
+            }
+            streamInto(assistantId, messages, thinking, enableSearch, requestTitle)
         }
     }
 
@@ -523,7 +532,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun buildApiMessages(history: List<MessageUi>): List<ApiMessage> {
         val base = settings.baseUrl
         val apiKey = settings.apiKey
-        return history.map { message ->
+        return history.mapNotNull { message ->
+            // 失败/空回答和空提问不进上下文（与官方一致）
+            if (message.role == ChatRole.Assistant && message.text.isBlank()) return@mapNotNull null
+            if (message.role == ChatRole.User &&
+                message.text.isBlank() &&
+                message.attachments.isEmpty()
+            ) {
+                return@mapNotNull null
+            }
             val files = message.attachments.mapNotNull { attachment ->
                 val path = attachment.path ?: return@mapNotNull null
                 val cached = uploadedFileIds[path]
@@ -533,7 +550,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         apiKey = apiKey,
                         file = java.io.File(path),
                         name = attachment.displayName,
-                    ) ?: return@mapNotNull null
+                        isImage = attachment.isImage,
+                    ) ?: throw IllegalStateException(
+                        "「${attachment.displayName}」上传失败，请检查网络或换一个文件",
+                    )
                     uploadedFileIds[path] = fileId
                     fileId
                 }
@@ -552,6 +572,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         history: List<ApiMessage>,
         thinking: Boolean,
         enableSearch: Boolean,
+        requestTitle: Boolean,
     ) {
         val startedAt = System.currentTimeMillis()
         val reasoning = StringBuilder()
@@ -589,8 +610,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 messages = history,
                 // 深度思考开关 → thinking.type
                 thinking = thinking,
-                // 智能搜索开关 → tools[deepseek_web_search]
+                // 智能搜索开关 → tools[deepseek_web_search]（deepseek_read_url 常开）
                 enableSearch = enableSearch,
+                requestTitle = requestTitle,
             ).collect { event ->
                 when (event) {
                     is StreamEvent.Reasoning -> {
@@ -647,6 +669,14 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
                     is StreamEvent.Finish -> {
                         finishReason = event.reason
+                    }
+
+                    is StreamEvent.Title -> {
+                        // 服务端从首条提问生成标题；用户手动改过就不覆盖
+                        if (!titleEdited && event.title.isNotBlank()) {
+                            title = event.title.trim().take(40)
+                            _state.update { it.copy(title = title) }
+                        }
                     }
 
                     StreamEvent.Done -> Unit
@@ -766,52 +796,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    /** 发给模型的正文：带附件时把图片/文件信息（文本文件内容）拼在用户文字前面 */
-    private fun promptFor(message: MessageUi): String {
-        if (message.attachments.isEmpty()) return message.text
-        val sb = StringBuilder()
-        message.attachments.forEach { a ->
-            if (a.isImage) {
-                sb.append("[图片] ").append(a.displayName).append('\n')
-            } else {
-                sb.append("[附件] ").append(a.displayName).append('\n')
-                readTextAttachment(a)?.let { body ->
-                    sb.append("```\n").append(body).append("\n```\n")
-                }
-            }
-        }
-        if (message.text.isNotBlank()) sb.append('\n').append(message.text)
-        return sb.toString().trim()
-    }
-
-    private fun readTextAttachment(a: AttachmentUi): String? {
-        val path = a.path ?: return null
-        if (!isTextFile(a.displayName)) return null
-        return runCatching {
-            val file = File(path)
-            if (!file.length().let { it in 1..2_000_000 }) return null
-            file.bufferedReader().use { reader ->
-                val buffer = CharArray(20_000)
-                val read = reader.read(buffer)
-                if (read <= 0) null else String(buffer, 0, read)
-            }
-        }.getOrNull()
-    }
-
-    private fun isTextFile(name: String): Boolean {
-        val ext = name.substringAfterLast('.', "").lowercase()
-        return ext in TEXT_EXTENSIONS
-    }
-
     private fun newId(prefix: String) = "$prefix-" + UUID.randomUUID().toString().take(8)
 
     val selectedModel: String get() = settings.model
     val hasApiKey: Boolean get() = settings.apiKey.isNotBlank()
-
-    private companion object {
-        val TEXT_EXTENSIONS = setOf(
-            "txt", "md", "markdown", "csv", "json", "xml", "html", "htm", "log",
-            "kt", "java", "py", "js", "ts", "tsx", "jsx", "css", "yml", "yaml", "ini", "conf", "sql",
-        )
-    }
 }

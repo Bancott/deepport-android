@@ -104,9 +104,14 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 5. 来源列表的真实站点图标（现在用域名首字母 + 按域名散列配色）
 
 > 对话协议已换成官方 chat-demo 同款 Anthropic 兼容接口：
-> `POST {origin}/anthropic/v1/messages`，请求体带 `thinking:{type}`、`tools:[deepseek_web_search]`、
-> `safety_check`、`title`、`stream`；附件走 `/anthropic/v1/files`（`anthropic-beta: files-api-2025-04-14`），
-> ASR 走 `/v1/tools/asr`。事件名与 JSON `type` 一致，来源来自 `web_search_tool_result` 与 `citations_delta`。
+> `POST {origin}/anthropic/v1/messages`，请求体带 `system`（助手身份说明）、`thinking:{type}`、
+> `tools`（`deepseek_read_url` 常开；智能搜索再追加 `deepseek_web_search`）、`safety_check`、
+> `title`（只在会话还没有标题的第一轮请求）、`stream`；
+> 标题从 `message_delta.delta.title` 回填，`stop_reason` 与 `usage` 同在该事件里（`max_tokens` → 截断提示）。
+> 附件走 `/anthropic/v1/files`（`anthropic-beta: files-api-2025-04-14`，图片不传 `purpose`，
+> PDF/Word/PPT 用 `rich_layout_recognition`，其余 `user_data`）；ASR 走 `/v1/tools/asr`，
+> TTS 走 `/v1/tools/tts`，两者用 `Authorization: Bearer`。对话/文件用 `x-api-key`。
+> 事件名与 JSON `type` 一致，来源来自 `web_search_tool_result` 与 `citations_delta`；流内错误帧（`error`）按 JSON 里的 message 抛出。
 
 
 
@@ -115,18 +120,20 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 - **分支树**：消息按 `parentId` 存成树，`activeChild` 记录每个父节点选中的子节点；重新生成会在同一父节点下建 sibling 并切过去，动作条左端出现 `‹ 2/2 ›` 可来回切；失败重试原地复用节点，不额外产生分支。整棵树落盘，重启后连选中分支一起恢复。
 - **会话管理**：抽屉长按 → 重命名（弹窗，写入 `titleEdited` 后不再被首条问题覆盖）/ 置顶（置顶分组 + 行首图钉）/ 删除（二次确认）；多选的置顶与删除同样写回存储。
 - **搜索页**：抽屉顶部搜索框进入独立搜索页，匹配标题与当前分支正文，命中处高亮，点结果直接打开会话。
-- **附件**：`+` 展开与官方一致的三块大方块（拍照 / 相册 / 文件，114.7×84dp、间距 8dp）；相册走 Photo Picker，文件走 SAF，内容统一复制进 `files/attachments` 再挂到输入卡（缩略图 + 删除角标）；文本类文件发送时把内容拼进 prompt，图片只带文件名。
+- **附件**：`+` 展开与官方一致的三块大方块（拍照 / 相册 / 文件，114.7×84dp、间距 8dp）；相册走 Photo Picker，文件走 SAF，内容统一复制进 `files/attachments` 再挂到输入卡（缩略图 + 删除角标）；发送时先走 files API 换 `file_id`，图片发 `image` 块、其余发 `document` 块；上传失败会明确报错，不再静默丢附件。
 - **应用内相机**：CameraX 全屏预览 + 快门，另有闪光灯、前后摄切换、点按对焦（对焦圈淡入 0.9 秒后淡出）；拍完直接作为图片附件回到会话（权限被拒有明确重授权入口）。
-- **语音**：按住说话即开录（`MediaRecorder`），整屏椭圆泛蓝光 + 「松手发送，上滑取消」+ 28 根波形条；上滑转红显示「松手取消」；松手后走 OpenAI 兼容的 `/audio/transcriptions` 转写并回填输入框（服务在「设置 → 模型设置 → 语音识别」里单独配，未配置时给出明确提示）。
+- **语音**：按住说话即开录（`MediaRecorder`），整屏椭圆泛蓝光 + 「松手发送，上滑取消」+ 28 根波形条；上滑转红显示「松手取消」；松手后走 `/v1/tools/asr`（Bearer 鉴权，和对话共用 API Key）转写并回填输入框，失败给出明确提示。
 
 ## 7. 朗读 / 消息编辑 / 智能搜索 / 来源列表
 
 - **朗读**：`Speaker` 包系统 `TextToSpeech`（Manifest 里补了 `TTS_SERVICE` 的 queries，否则 Android 11+ 绑不上引擎）；动作条喇叭读当前回答，顶栏喇叭打开后新回答生成完自动读；朗读前把 Markdown 洗成纯文本（去代码块/强调/链接语法）。没有正文的消息点了会提示"还没有可朗读的正文"。
 - **消息编辑**：用户消息长按 → 编辑（多行弹窗），确认后在同一父节点下新建用户节点并重新回答，原答案保留在 `‹n/m›` 分支里。
-- **智能搜索**：`搜索` 开关现在真的进请求体（`search: true`），400 时自动退回不带搜索重发一次；响应里若有 `search_results` / `references` / `sources` 就归一化成来源列表。
+- **智能搜索**：`智能搜索` 开关注入 `tools[deepseek_web_search]`（`deepseek_read_url` 常开）；来源从 `web_search_tool_result` 与正文 `citations_delta` 合并去重。
+- **会话标题**：首轮请求带 `title:{enabled:true}`，服务端从提问生成标题经 `message_delta` 下发后回填；用户手动重命名过就不再请求/覆盖。
+- **协议真机验证**（2026-11-18，小米 14 + 真实 Key）：服务端标题、深度思考、智能搜索、23 个网页来源与来源 Sheet 全部跑通；files API 的图片/文档块也用同一 Key 验证过（`image` 200、`document` 200）。
 - **选择文本**：长按菜单 → 选择文本，弹出可自由选段的弹窗（SelectionContainer），底部有「全选并复制」。
 - **来源列表**：回答下方「N 个网页」可点，底部 Sheet 列出站点徽标（域名首字母 + 按域名散列配色，离线也有稳定图标）/ 标题 / 摘要，点条目在 App 内置 WebView 里打开（标题「来源」）。
-- **输出额度**：`max_tokens` 从 1024 提到 8192 —— 深度思考会把思考过程算进输出额度，1024 经常"想完就没正文"；`finish_reason=length` 时回答下方会提示被截断，正文为空时也会提示"这次没有生成正文，可点重新生成再试"。
+- **输出额度**：新协议不再传 `max_tokens`，由服务端决定上限；思考过程也算输出额度。`stop_reason=max_tokens` 映射成 `length`，回答下方提示被截断，正文为空时也会提示"这次没有生成正文，可点重新生成再试"。
 
 
 

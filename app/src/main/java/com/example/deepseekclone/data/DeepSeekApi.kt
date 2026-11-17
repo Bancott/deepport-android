@@ -34,6 +34,8 @@ sealed interface ApiEvent {
     data class Sources(val items: List<SourceItem>) : ApiEvent
     data class Usage(val input: Int, val output: Int) : ApiEvent
     data class Stop(val reason: String) : ApiEvent
+    /** message_delta 里下发的会话标题（只在请求带 title 时出现） */
+    data class Title(val title: String) : ApiEvent
 }
 
 class DeepSeekApi {
@@ -47,24 +49,35 @@ class DeepSeekApi {
         messages: List<ApiMessage>,
         thinking: Boolean,
         search: Boolean,
+        requestTitle: Boolean,
     ): Flow<ApiEvent> = flow {
         val url = trimOrigin(origin) + "/anthropic/v1/messages"
         val body = JSONObject().apply {
             put("model", model)
             put("stream", true)
+            put("system", SYSTEM_PROMPT)
             put("thinking", JSONObject().put("type", if (thinking) "enabled" else "disabled"))
             put("safety_check", JSONObject().put("level", "high"))
-            put("title", JSONObject().put("enabled", true))
-            if (search) {
-                put(
-                    "tools",
-                    JSONArray().put(
+            // 阅读链接常开；智能搜索开关只决定是否再声明搜索工具（与官方 chat-demo 一致）
+            put(
+                "tools",
+                JSONArray().apply {
+                    put(
                         JSONObject()
-                            .put("type", "deepseek_web_search")
-                            .put("name", "deepseek_web_search"),
-                    ),
-                )
-            }
+                            .put("type", "deepseek_read_url")
+                            .put("name", "deepseek_read_url"),
+                    )
+                    if (search) {
+                        put(
+                            JSONObject()
+                                .put("type", "deepseek_web_search")
+                                .put("name", "deepseek_web_search"),
+                        )
+                    }
+                },
+            )
+            // 只有还没定标题的会话才让服务端补标题，避免每轮都白花一次生成
+            if (requestTitle) put("title", JSONObject().put("enabled", true))
             put(
                 "messages",
                 JSONArray().apply {
@@ -81,8 +94,8 @@ class DeepSeekApi {
             readTimeout = 180_000
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Accept", "text/event-stream")
+            // 兼容接口的鉴权方式（与官方 chat-demo 一致）
             setRequestProperty("x-api-key", apiKey)
-            setRequestProperty("Authorization", "Bearer $apiKey")
             if (hasFile) setRequestProperty("anthropic-beta", FILES_BETA)
         }
 
@@ -93,21 +106,40 @@ class DeepSeekApi {
                 val err = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
                 throw IllegalStateException(describeError(code, err))
             }
-            // 事件名与 JSON 里的 type 一致，直接按 data 里的 type 分发
+            if (!conn.contentType.orEmpty().contains("text/event-stream")) {
+                // 正常请求不该走到这里；按接口文档回一段 JSON 错误时给出可读提示
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                throw IllegalStateException(describeError(code, text))
+            }
             val sources = LinkedHashMap<String, SourceItem>()
-            conn.inputStream.bufferedReader().useLines { lines ->
-                var data = StringBuilder()
-                lines.forEach { raw ->
-                    when {
-                        raw.startsWith("data:") -> data.append(raw.removePrefix("data:").trim())
-                        raw.isBlank() -> {
-                            if (data.isNotEmpty()) {
-                                parseEvent(data.toString(), sources)?.let { emit(it) }
-                                data = StringBuilder()
-                            }
+            val reader = conn.inputStream.bufferedReader()
+            var eventName = ""
+            var data = StringBuilder()
+            var stopped = false
+            while (!stopped) {
+                val raw = reader.readLine() ?: break
+                val line = raw.trimEnd('\r')
+                when {
+                    line.startsWith("event:") -> eventName = line.removePrefix("event:").trim()
+                    line.startsWith("data:") -> {
+                        if (data.isNotEmpty()) data.append('\n')
+                        data.append(line.removePrefix("data:").trim())
+                    }
+                    // 空行 = 一帧结束；事件名与 JSON 的 type 一致，SSE 的 event 名只用来识别错误帧
+                    line.isBlank() -> {
+                        if (data.isNotEmpty()) {
+                            val frame = parseFrame(eventName, data.toString(), sources)
+                            data = StringBuilder()
+                            frame.events.forEach { emit(it) }
+                            stopped = frame.stop
                         }
+                        eventName = ""
                     }
                 }
+            }
+            // 少数服务端不补最后一个空行，收尾时再解一次
+            if (data.isNotEmpty()) {
+                parseFrame(eventName, data.toString(), sources).events.forEach { emit(it) }
             }
             if (sources.isNotEmpty()) emit(ApiEvent.Sources(sources.values.toList()))
         } finally {
@@ -129,16 +161,26 @@ class DeepSeekApi {
         return JSONObject().put("role", m.role).put("content", blocks)
     }
 
-    private fun parseEvent(
+    /** 一帧 SSE 的解析结果：要下发的事件 + 是否已经收到 message_stop */
+    private class Frame(val events: List<ApiEvent> = emptyList(), val stop: Boolean = false)
+
+    private fun parseFrame(
+        eventName: String,
         raw: String,
         sources: MutableMap<String, SourceItem>,
-    ): ApiEvent? {
-        val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+    ): Frame {
+        val obj = runCatching { JSONObject(raw) }.getOrNull()
+            ?: return if (eventName == "error") throw IllegalStateException(raw) else Frame()
+        // 流内错误：可能是 {"error":{...}} 的无名帧（无 type），也可能挂在 event: error 上
+        obj.optJSONObject("error")?.optString("message")?.takeIf { it.isNotBlank() }?.let {
+            throw IllegalStateException(it)
+        }
+        if (eventName == "error") throw IllegalStateException(raw)
         return when (obj.optString("type")) {
             "content_block_start" -> {
-                val block = obj.optJSONObject("content_block") ?: return null
+                val block = obj.optJSONObject("content_block") ?: return Frame()
                 if (block.optString("type") == "web_search_tool_result") {
-                    val arr = block.optJSONArray("content") ?: return null
+                    val arr = block.optJSONArray("content") ?: return Frame()
                     for (i in 0 until arr.length()) {
                         val item = arr.optJSONObject(i) ?: continue
                         if (item.optString("type") != "web_search_result") continue
@@ -151,25 +193,23 @@ class DeepSeekApi {
                             snippet = item.optString("snippet"),
                         )
                     }
-                    null
-                } else {
-                    null
                 }
+                Frame()
             }
 
             "content_block_delta" -> {
-                val delta = obj.optJSONObject("delta") ?: return null
-                when (delta.optString("type")) {
+                val delta = obj.optJSONObject("delta") ?: return Frame()
+                val event = when (delta.optString("type")) {
                     "thinking_delta" -> ApiEvent.Thinking(delta.optString("thinking"))
                     "text_delta" -> ApiEvent.Text(delta.optString("text"))
                     "citations_delta" -> {
-                        val c = delta.optJSONObject("citation") ?: return null
-                        val url = c.optString("url")
+                        val citation = delta.optJSONObject("citation")
+                        val url = citation?.optString("url").orEmpty()
                         if (url.isNotBlank()) {
                             sources[url] = SourceItem(
-                                title = c.optString("title").ifBlank { url },
+                                title = citation?.optString("title").orEmpty().ifBlank { url },
                                 url = url,
-                                snippet = c.optString("cited_text"),
+                                snippet = citation?.optString("cited_text").orEmpty(),
                             )
                         }
                         null
@@ -177,38 +217,50 @@ class DeepSeekApi {
 
                     else -> null
                 }
+                Frame(listOfNotNull(event))
             }
 
             "message_start" -> {
                 val usage = obj.optJSONObject("message")?.optJSONObject("usage")
-                usage?.let {
-                    ApiEvent.Usage(
+                Frame(
+                    listOfNotNull(
+                        usage?.let {
+                            ApiEvent.Usage(
+                                input = it.optInt("input_tokens"),
+                                output = it.optInt("output_tokens"),
+                            )
+                        },
+                    ),
+                )
+            }
+
+            // message_delta 同时带 stop_reason / title / usage，三者都要处理；
+            // 之前只看 usage，导致「达到输出上限」的 stop_reason 被吞掉，截断提示永远不出现
+            "message_delta" -> {
+                val events = mutableListOf<ApiEvent>()
+                obj.optJSONObject("usage")?.let {
+                    events += ApiEvent.Usage(
                         input = it.optInt("input_tokens"),
                         output = it.optInt("output_tokens"),
                     )
                 }
-            }
-
-            "message_delta" -> {
-                val usage = obj.optJSONObject("usage")
-                if (usage != null) {
-                    ApiEvent.Usage(
-                        input = usage.optInt("input_tokens"),
-                        output = usage.optInt("output_tokens"),
-                    )
-                } else {
-                    val reason = obj.optJSONObject("delta")?.optString("stop_reason").orEmpty()
-                    if (reason.isBlank()) null else ApiEvent.Stop(reason)
+                val delta = obj.optJSONObject("delta")
+                delta?.optString("stop_reason")?.takeIf { it.isNotBlank() }?.let {
+                    events += ApiEvent.Stop(it)
                 }
+                delta?.optString("title")?.trim()?.takeIf { it.isNotBlank() }?.let {
+                    events += ApiEvent.Title(it)
+                }
+                Frame(events)
             }
 
-            "message_stop" -> null
+            "message_stop" -> Frame(stop = true)
             "error" -> {
                 val msg = obj.optJSONObject("error")?.optString("message").orEmpty()
                 throw IllegalStateException(msg.ifBlank { "生成中断" })
             }
 
-            else -> null
+            else -> Frame()
         }
     }
 
@@ -381,9 +433,13 @@ class DeepSeekApi {
 
     companion object {
         const val FILES_BETA = "files-api-2025-04-14"
-        /** PDF / Word / PPT 需要服务端做排版识别，其余按纯数据上传 */
-        fun purposeFor(name: String): String? = when (name.substringAfterLast('.', "").lowercase()) {
-            "pdf", "doc", "docx", "ppt", "pptx" -> "rich_layout_recognition"
+        /** 所有生成请求统一携带的助手身份说明（官方 chat-demo 同款） */
+        const val SYSTEM_PROMPT = "该助手为DeepSeek，由深度求索公司创造。"
+        /** 图片不传 purpose；PDF / Word / PPT 需要服务端做版面识别，其余按纯数据上传 */
+        fun purposeFor(name: String, isImage: Boolean): String? = when {
+            isImage -> null
+            name.substringAfterLast('.', "").lowercase() in
+                setOf("pdf", "doc", "docx", "ppt", "pptx") -> "rich_layout_recognition"
             else -> "user_data"
         }
     }
