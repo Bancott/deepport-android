@@ -293,14 +293,16 @@ private fun ActionRow(
             }
         }
 
-        // 第三个位置：模型开始工作后才"新增"出来的暂停按钮
+        // 第三个位置：模型开始工作后才"新增"出来的暂停按钮（包在 40dp 盒里，与左侧按钮同间距）
         if (generating) {
-            SendOrStopButton(
-                generating = true,
-                enabled = true,
-                onSend = onSend,
-                onStop = onStop,
-            )
+            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                SendOrStopButton(
+                    generating = true,
+                    enabled = true,
+                    onSend = onSend,
+                    onStop = onStop,
+                )
+            }
         }
     }
 }
@@ -336,6 +338,7 @@ private fun SendOrStopButton(
         }
     }
 }
+
 
 
 

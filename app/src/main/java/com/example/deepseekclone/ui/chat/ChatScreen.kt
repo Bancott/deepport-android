@@ -1,5 +1,7 @@
 ﻿package com.example.deepseekclone.ui.chat
 
+import androidx.compose.ui.draw.rotate
+
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -94,16 +96,18 @@ fun ChatScreen(
                 contentDescription = if (state.isSpeechOutputOn) "关闭朗读" else "开启朗读",
                 onClick = onToggleSpeechOutput,
             ) {
-                Icon(
-                    imageVector = if (state.isSpeechOutputOn) {
-                        Icons.AutoMirrored.Outlined.VolumeUp
-                    } else {
-                        Icons.AutoMirrored.Outlined.VolumeOff
-                    },
-                    contentDescription = null,
-                    tint = colors.textPrimary,
-                    modifier = Modifier.size(DsDimen.IconSize),
-                )
+                // 顶栏用用户提供的「声音」SVG；关闭朗读时叠一条斜线
+                Box(contentAlignment = Alignment.Center) {
+                    SvgIcon(R.drawable.ic_action_volume, tint = colors.textPrimary, size = 22.dp)
+                    if (!state.isSpeechOutputOn) {
+                        Box(
+                            Modifier
+                                .size(width = 26.dp, height = 1.8.dp)
+                                .rotate(-45f)
+                                .background(colors.textPrimary),
+                        )
+                    }
+                }
             }
             Spacer(Modifier.width(8.dp))
             CircleIconButton(
@@ -263,6 +267,10 @@ private fun ChatVoiceLightPreview() {
 private val DisclaimerBlockTopPadding = 3.dp
 private val DisclaimerBlockBottomPadding = 10.dp
 private val DisclaimerBlockHeight = 27.dp
+
+
+
+
 
 
 

@@ -12,15 +12,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -363,7 +364,8 @@ private fun MessageActionBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 8.dp)
-            .height(40.dp),
+            .height(40.dp)
+            .offset(x = (-8.5).dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (message.branchCount > 1) {
@@ -417,15 +419,19 @@ private fun MessageActionBar(
             onClick = onShare,
         )
 
-        Spacer(Modifier.weight(1f))
-
+        // token 紧跟分享，与图标同一节奏，组成一组
         TokenInline(message = message, sessionTokens = sessionTokens)
 
-        ActionIcon(
-            icon = { tint -> SvgIcon(R.drawable.ic_action_refresh, tint = tint, size = 21.dp) },
-            label = "重新生成",
-            onClick = onRegenerate,
-        )
+        Spacer(Modifier.weight(1f))
+
+        // 重试右缘对齐用户气泡右侧（16dp）
+        Box(Modifier.offset(x = 25.dp)) {
+            ActionIcon(
+                icon = { tint -> SvgIcon(R.drawable.ic_action_refresh, tint = tint, size = 21.dp) },
+                label = "重新生成",
+                onClick = onRegenerate,
+            )
+        }
     }
 }
 
@@ -510,7 +516,7 @@ private fun TokenInline(message: MessageUi, sessionTokens: Int) {
         append(" ↓")
         append(formatTokens(usage.completion))
         if (sessionTokens > 0) {
-            append(" · ")
+            append(" tok · ")
             append(formatTokens(sessionTokens))
         }
     }
@@ -533,6 +539,10 @@ private fun TokenInline(message: MessageUi, sessionTokens: Int) {
         )
     }
 }
+
+
+
+
 
 
 
