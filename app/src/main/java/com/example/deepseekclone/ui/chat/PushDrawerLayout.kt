@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -69,6 +69,8 @@ fun PushDrawerLayout(
         val density = LocalDensity.current
         val drawerWidth = maxWidth * drawerWidthFraction
         val drawerWidthPx = with(density) { drawerWidth.toPx() }
+        val screenWidthPx = with(density) { maxWidth.toPx() }
+        val lagPower = 2.2f
 
         fun settle(open: Boolean) {
             onDrawerOpenChange(open)
@@ -90,9 +92,13 @@ fun PushDrawerLayout(
                         onHorizontalDrag = { change, dragAmount ->
                             if (dragging) {
                                 change.consume()
+                                // 手指直接控制"露出的屏幕宽度比例"，再由它反推动画进度，
+                                // 这样拖拽距离和视觉上的分割位置是 1:1 的。
+                                val revealed = progress.value.pow(lagPower) +
+                                    dragAmount / screenWidthPx
                                 scope.launch {
                                     progress.snapTo(
-                                        (progress.value + dragAmount / drawerWidthPx).coerceIn(0f, 1f),
+                                        revealed.coerceIn(0f, 1f).pow(1f / lagPower),
                                     )
                                 }
                             }
@@ -100,12 +106,12 @@ fun PushDrawerLayout(
                         onDragEnd = {
                             if (dragging) {
                                 dragging = false
-                                settle(progress.value > 0.5f)
+                                settle(progress.value.pow(lagPower) > 0.5f)
                             }
                         },
                         onDragCancel = {
                             dragging = false
-                            settle(progress.value > 0.5f)
+                            settle(progress.value.pow(lagPower) > 0.5f)
                         },
                     )
                 },
@@ -174,3 +180,4 @@ fun PushDrawerLayout(
         }
     }
 }
+
