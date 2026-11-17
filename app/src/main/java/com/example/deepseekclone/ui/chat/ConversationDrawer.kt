@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -84,7 +85,9 @@ fun ConversationDrawer(
         Column(
             Modifier
                 .fillMaxSize()
-                .statusBarsPadding(),
+                .statusBarsPadding()
+                // 底部让出系统手势条高度，避免账户名贴住小白条
+                .navigationBarsPadding(),
         ) {
             if (state.multiSelect) {
                 MultiSelectHeader(onClose = onExitMultiSelect)
@@ -457,6 +460,7 @@ private fun DrawerFooter(name: String, onClick: () -> Unit) {
         )
     }
 }
+
 
 
 

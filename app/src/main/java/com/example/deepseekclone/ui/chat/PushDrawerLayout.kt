@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -66,6 +67,8 @@ fun PushDrawerLayout(
     val scope = rememberCoroutineScope()
     val velocityTracker = remember { VelocityTracker() }
     var animJob by remember { mutableStateOf<Job?>(null) }
+    // 只在跨越阈值时重组一次，避免动画期间每帧重组整个会话页（卡顿根因）
+    val pageLifted = remember { derivedStateOf { progress > 0.01f } }
 
     fun animateProgressTo(target: Float, duration: Int = 280) {
         animJob?.cancel()
@@ -168,10 +171,9 @@ fun PushDrawerLayout(
                         val s = 1f - 0.07f * pageP
                         scaleX = s
                         scaleY = s
-                        if (progress > 0.01f) {
-                            clip = true
-                            shape = RoundedCornerShape(20.dp)
-                        }
+                        // 常驻 clip：避免动画中途切换 clip 属性导致图层重建
+                        clip = true
+                        shape = RoundedCornerShape(20.dp)
                     }
                     .background(colors.pushedPage),
             ) {
@@ -187,7 +189,7 @@ fun PushDrawerLayout(
                 }
 
                 // 卡片左缘 1dp 高光（官方 ≈ #2B2B2B）
-                if (progress > 0.01f) {
+                if (pageLifted.value) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
@@ -199,7 +201,7 @@ fun PushDrawerLayout(
             }
 
             /* ---------- 3. 点击露出的页面区域关闭 ---------- */
-            if (progress > 0.01f) {
+            if (pageLifted.value) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -210,3 +212,7 @@ fun PushDrawerLayout(
         }
     }
 }
+
+
+
+
