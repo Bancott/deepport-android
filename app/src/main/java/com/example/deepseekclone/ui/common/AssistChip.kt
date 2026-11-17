@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.common
+package com.example.deepseekclone.ui.common
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,8 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.ui.theme.DsDimen
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
@@ -54,7 +56,7 @@ fun DsAssistChip(
         Spacer(Modifier.width(6.dp))
         Text(
             text = label,
-            style = DsText.caption,
+            style = DsText.caption.copy(fontSize = 13.5.sp, fontWeight = FontWeight.Medium),
             color = contentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

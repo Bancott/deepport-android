@@ -1,4 +1,4 @@
-# DeepSeek Clone · 原生 Android 复刻
+﻿# DeepSeek Clone · 原生 Android 复刻
 
 包名 `com.example.deepseekclone`，Kotlin + Jetpack Compose + Material 3，**不使用 WebView 做主 UI**。
 视觉与交互基线来自官方 DeepSeek 2.8.0(297) 安卓版截图（小米 14 / 1200×2670 / 3.0x）。
@@ -113,3 +113,4 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 - 视觉尺寸以 3.0x（≈400×890dp）归一，真机需 `adb shell wm density` 复核。
 - 图标：Material 图标库只用于「地球 / 键盘 / 关闭 / 音量」等通用项；品牌相关图标全部 Canvas 自绘，避免形状偏差。
 - 任何颜色都不得在页面里硬编码，一律走 `DsTheme.colors`。
+

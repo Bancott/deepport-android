@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.common
+﻿package com.example.deepseekclone.ui.common
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
@@ -35,7 +35,7 @@ fun MenuGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 24.dp)
 }
 
 @Composable
-fun PlusCircleGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 24.dp) {
+fun PlusCircleGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 25.dp) {
     Icon(
         painter = painterResource(R.drawable.ic_plus_circle),
         contentDescription = null,
@@ -45,7 +45,7 @@ fun PlusCircleGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 
 }
 
 @Composable
-fun VoiceGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 24.dp) {
+fun VoiceGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 25.dp) {
     Icon(
         painter = painterResource(R.drawable.ic_voice),
         contentDescription = null,
@@ -65,9 +65,20 @@ fun DeepThinkGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 1
 }
 
 @Composable
-fun NewChatGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 24.dp) {
+fun NewChatGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 25.dp) {
     Icon(
         painter = painterResource(R.drawable.ic_new_chat),
+        contentDescription = null,
+        modifier = modifier.size(iconSize),
+        tint = color,
+    )
+}
+
+/** 智能搜索：用户提供的互联网（地球）矢量，1024 viewBox，图形约占 858/1024 */
+@Composable
+fun GlobeGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 18.3.dp) {
+    Icon(
+        painter = painterResource(R.drawable.ic_globe),
         contentDescription = null,
         modifier = modifier.size(iconSize),
         tint = color,
@@ -112,3 +123,4 @@ fun StopSquareGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 
         )
     }
 }
+

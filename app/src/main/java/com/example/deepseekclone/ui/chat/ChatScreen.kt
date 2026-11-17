@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
@@ -13,6 +13,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
@@ -39,6 +44,7 @@ import com.example.deepseekclone.ui.theme.DsTheme
  * 消息流、流式态、分支条在后续迭代补齐，本文件保持单一职责：
  * 只负责骨架与状态分发，不含业务逻辑。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(
     state: ChatUiState,
@@ -56,6 +62,7 @@ fun ChatScreen(
     onStop: () -> Unit = {},
 ) {
     val colors = DsTheme.colors
+    val imeVisible = WindowInsets.isImeVisible
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -81,6 +88,7 @@ fun ChatScreen(
                     modifier = Modifier.size(DsDimen.IconSize),
                 )
             }
+            Spacer(Modifier.width(8.dp))
             CircleIconButton(
                 contentDescription = "新建对话",
                 onClick = onNewChatClick,
@@ -98,6 +106,9 @@ fun ChatScreen(
         }
 
         DsInputBar(
+            modifier = Modifier
+                .imePadding()
+                .padding(bottom = if (imeVisible) 8.dp else 0.dp),
             state = state.input,
             generating = state.isGenerating,
             onTextChange = onTextChange,
@@ -110,14 +121,17 @@ fun ChatScreen(
             onStop = onStop,
         )
 
-        Text(
-            text = "回答由 AI 生成，仅供参考",
-            style = DsText.meta.copy(fontSize = 12.sp),
-            color = colors.textTertiary,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(top = 3.dp, bottom = 10.dp),
-        )
+        // 键盘弹起时免责声明整行移除（不占位），保证输入栏紧贴键盘；收起后恢复
+        if (!imeVisible) {
+            Text(
+                text = "回答由 AI 生成，仅供参考",
+                style = DsText.meta.copy(fontSize = 12.sp),
+                color = colors.textTertiary,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 3.dp, bottom = 10.dp),
+            )
+        }
     }
 }
 
@@ -205,6 +219,9 @@ private fun ChatVoiceLightPreview() {
         )
     }
 }
+
+
+
 
 
 

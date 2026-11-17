@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.ui.common.CircleIconButton
 import com.example.deepseekclone.ui.common.DeepThinkGlyph
 import com.example.deepseekclone.ui.common.DsAssistChip
+import com.example.deepseekclone.ui.common.GlobeGlyph
 import com.example.deepseekclone.ui.common.PlusCircleGlyph
 import com.example.deepseekclone.ui.common.SendArrowGlyph
 import com.example.deepseekclone.ui.common.StopSquareGlyph
@@ -253,28 +254,21 @@ private fun ActionRow(
             label = "智能搜索",
             selected = state.smartSearch,
             onClick = onToggleSmartSearch,
-        ) { tint ->
-            Icon(
-                imageVector = Icons.Outlined.Language,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(15.dp),
-            )
-        }
+        ) { tint -> GlobeGlyph(color = tint, iconSize = 18.3.dp) }
 
         Spacer(Modifier.weight(1f))
 
         CircleIconButton(
             contentDescription = "添加附件",
             onClick = onAttachClick,
-        ) { PlusCircleGlyph(color = colors.textPrimary, iconSize = 24.dp) }
+        ) { PlusCircleGlyph(color = colors.textPrimary, iconSize = 25.dp) }
 
         CircleIconButton(
             contentDescription = if (state.mode == InputMode.Text) "切换到按住说话" else "切换到键盘输入",
             onClick = onToggleMode,
         ) {
             if (state.mode == InputMode.Text) {
-                VoiceGlyph(color = colors.textPrimary, iconSize = 24.dp)
+                VoiceGlyph(color = colors.textPrimary, iconSize = 25.dp)
             } else {
                 Icon(
                     imageVector = Icons.Outlined.Keyboard,
@@ -327,6 +321,7 @@ private fun SendOrStopButton(
         }
     }
 }
+
 
 
 
