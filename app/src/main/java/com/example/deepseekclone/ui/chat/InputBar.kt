@@ -1,5 +1,7 @@
 ﻿package com.example.deepseekclone.ui.chat
 
+import com.example.deepseekclone.R
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.ui.common.CircleIconButton
 import com.example.deepseekclone.ui.common.SendCircleGlyph
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.common.DeepThinkGlyph
 import com.example.deepseekclone.ui.common.DsAssistChip
 import com.example.deepseekclone.ui.common.GlobeGlyph
@@ -283,12 +286,8 @@ private fun ActionRow(
                 if (state.mode == InputMode.Text) {
                     VoiceGlyph(color = colors.textPrimary, iconSize = 25.dp)
                 } else {
-                    Icon(
-                        imageVector = Icons.Outlined.Keyboard,
-                        contentDescription = null,
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(26.dp),
-                    )
+                    // 键盘用用户素材：圆环 Ø24.4 与加号/麦克风一致，故画框取 27.7dp
+                    SvgIcon(R.drawable.ic_keyboard_circle, tint = colors.textPrimary, size = 27.7.dp)
                 }
             }
         }
@@ -338,6 +337,8 @@ private fun SendOrStopButton(
         }
     }
 }
+
+
 
 
 
