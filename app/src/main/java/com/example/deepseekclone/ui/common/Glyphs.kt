@@ -127,28 +127,27 @@ fun StopSquareGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 
 
 
 /**
- * 上传/发送：与麦克风等大的描边圆 + 居中向上箭头（官方输入框有文字时就是这个按钮）
- * stroke 1.9dp、圆直径 24.6dp，箭头占圆内约 46%，比单纯箭头更醒目
+ * 上传/发送：蓝色实心圆 + 白色加粗向上箭头（有文字时替换语音按钮，尺寸与麦克风一致 24.6dp）
  */
 @Composable
-fun SendCircleGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 24.6.dp) {
+fun SendCircleGlyph(
+    background: Color,
+    arrowColor: Color,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 24.6.dp,
+) {
     Canvas(modifier = modifier.size(iconSize)) {
         val s = size.minDimension
-        val stroke = s * 0.077f
-        val r = s / 2f - stroke / 2f
-        drawCircle(
-            color = color,
-            radius = r,
-            style = Stroke(width = stroke),
-        )
-        // 箭头：杆 + 两撇，整体占圆直径的 ~46%
+        drawCircle(color = background, radius = s / 2f)
+
+        val stroke = s * 0.108f
         val cx = center.x
-        val topY = s * 0.30f
-        val bottomY = s * 0.70f
-        val headX = s * 0.115f
+        val topY = s * 0.285f
+        val bottomY = s * 0.715f
+        val headX = s * 0.135f
         val headY = s * 0.415f
-        drawLine(color, Offset(cx, bottomY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
-        drawLine(color, Offset(cx - headX, headY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
-        drawLine(color, Offset(cx + headX, headY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
+        drawLine(arrowColor, Offset(cx, bottomY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
+        drawLine(arrowColor, Offset(cx - headX, headY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
+        drawLine(arrowColor, Offset(cx + headX, headY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
     }
 }

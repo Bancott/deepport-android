@@ -270,7 +270,7 @@ private fun ActionRow(
             CircleIconButton(
                 contentDescription = "发送",
                 onClick = onSend,
-            ) { SendCircleGlyph(color = colors.primary, iconSize = 24.6.dp) }
+            ) { SendCircleGlyph(background = colors.primary, arrowColor = colors.onPrimary, iconSize = 24.6.dp) }
         } else {
             CircleIconButton(
                 contentDescription = if (state.mode == InputMode.Text) {
@@ -281,7 +281,7 @@ private fun ActionRow(
                 onClick = onToggleMode,
             ) {
                 if (state.mode == InputMode.Text) {
-                    VoiceGlyph(color = colors.textPrimary, iconSize = 25.dp)
+                    VoiceGlyph(color = colors.textPrimary, iconSize = 23.5.dp)
                 } else {
                     Icon(
                         imageVector = Icons.Outlined.Keyboard,
@@ -336,6 +336,7 @@ private fun SendOrStopButton(
         }
     }
 }
+
 
 
 

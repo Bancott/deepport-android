@@ -404,7 +404,7 @@ private fun MessageActionBar(
                     imageVector = Icons.Outlined.ContentCopy,
                     contentDescription = null,
                     tint = tint,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(20.dp),
                 )
             },
             label = "复制",
@@ -416,7 +416,7 @@ private fun MessageActionBar(
                     imageVector = Icons.Outlined.VolumeUp,
                     contentDescription = null,
                     tint = tint,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(20.dp),
                 )
             },
             label = "朗读",
@@ -428,7 +428,7 @@ private fun MessageActionBar(
                     imageVector = Icons.Outlined.Share,
                     contentDescription = null,
                     tint = tint,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(23.dp),
                 )
             },
             label = "分享",
@@ -445,7 +445,7 @@ private fun MessageActionBar(
                     imageVector = Icons.Outlined.Refresh,
                     contentDescription = null,
                     tint = tint,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(24.dp),
                 )
             },
             label = "重新生成",
@@ -558,6 +558,7 @@ private fun TokenInline(message: MessageUi, sessionTokens: Int) {
         )
     }
 }
+
 
 
 
