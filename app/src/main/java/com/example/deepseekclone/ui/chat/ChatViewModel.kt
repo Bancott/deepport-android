@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.deepseekclone.data.ChatMessage
 import com.example.deepseekclone.data.ChatRepository
+import com.example.deepseekclone.data.ChatStore
 import com.example.deepseekclone.data.SettingsStore
 import com.example.deepseekclone.data.StreamEvent
 import kotlinx.coroutines.Job
@@ -23,9 +24,26 @@ import java.util.UUID
 class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settings = SettingsStore.get(app)
+    private val chatStore = ChatStore(app)
     private val repository = ChatRepository()
 
     private val _state = MutableStateFlow(ChatUiState())
+
+    init {
+        // 恢复上次会话（杀进程重进还能看到）
+        chatStore.load()?.let { (title, messages) ->
+            if (messages.isNotEmpty()) {
+                val total = messages.sumOf { it.usage?.total ?: 0 }
+                _state.value = ChatUiState(title = title, messages = messages, sessionTokens = total)
+            }
+        }
+    }
+
+    /** 消息列表变化后落盘（本地持久化） */
+    private fun persist() {
+        val s = _state.value
+        if (s.messages.isEmpty()) chatStore.clear() else chatStore.save(s.title, s.messages)
+    }
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private var streamJob: Job? = null
@@ -57,6 +75,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleSpeechOutput() = _state.update { it.copy(isSpeechOutputOn = !it.isSpeechOutputOn) }
 
     fun newChat() {
+        chatStore.clear()
         streamJob?.cancel()
         _state.value = ChatUiState()
     }
@@ -189,6 +208,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         sessionTokens = st.sessionTokens + (usage?.total ?: 0),
                     )
                 }
+                persist()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 flush(force = true)
                 _state.update { st ->
@@ -199,6 +219,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         },
                     )
                 }
+                persist()
                 throw e
             } catch (e: Exception) {
                 flush(force = true)
@@ -234,6 +255,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 },
             )
         }
+        persist()
     }
 }
 
@@ -241,4 +263,7 @@ private fun ChatUiState.updateMessage(
     id: String,
     block: (MessageUi) -> MessageUi,
 ): ChatUiState = copy(messages = messages.map { if (it.id == id) block(it) else it })
+
+
+
 
