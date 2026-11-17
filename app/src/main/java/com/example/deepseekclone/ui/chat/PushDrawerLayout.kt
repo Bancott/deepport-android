@@ -167,21 +167,6 @@ fun PushDrawerLayout(
             ) {
                 drawer(Modifier.fillMaxSize())
 
-                // 浅色模式：官方在抽屉右缘有约 24dp 的柔和投影（#FCFCFC → #F0F0F0），
-                // 深色模式没有，所以只在这里画。
-                if (isLight) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxHeight()
-                            .width(30.dp)
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.04f)),
-                                ),
-                            ),
-                    )
-                }
             }
 
             /* ---------- 2. 会话页（上层卡片） ---------- */
@@ -238,6 +223,7 @@ fun PushDrawerLayout(
         }
     }
 }
+
 
 
 
