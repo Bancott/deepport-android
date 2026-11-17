@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.theme
+﻿package com.example.deepseekclone.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
@@ -74,7 +74,7 @@ object DsText {
     val h1 = TextStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 30.sp)
 
     /** Markdown 三级标题 */
-    val h2 = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 26.sp)
+    val h2 = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 20.sp, lineHeight = 28.sp)
 
     /** Markdown 正文 */
     val body = TextStyle(fontSize = 17.sp, lineHeight = 28.sp)
@@ -94,3 +94,4 @@ object DsText {
     /** 主按钮 */
     val button = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 17.sp, lineHeight = 24.sp)
 }
+

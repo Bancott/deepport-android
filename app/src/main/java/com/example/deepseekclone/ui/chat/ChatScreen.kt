@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
@@ -60,6 +60,14 @@ fun ChatScreen(
     onDismissTranscribedNotice: () -> Unit = {},
     onSend: () -> Unit = {},
     onStop: () -> Unit = {},
+    onToggleReasoning: (MessageUi) -> Unit = {},
+    onCopyMessage: (MessageUi) -> Unit = {},
+    onSpeakMessage: (MessageUi) -> Unit = {},
+    onShareMessage: (MessageUi) -> Unit = {},
+    onRegenerate: (MessageUi) -> Unit = {},
+    onRetryMessage: (MessageUi) -> Unit = {},
+    onBranchPrev: (MessageUi) -> Unit = {},
+    onBranchNext: (MessageUi) -> Unit = {},
 ) {
     val colors = DsTheme.colors
     // 键盘弹起时：免责声明保持占位（避免收起时整页回跳），
@@ -111,7 +119,26 @@ fun ChatScreen(
                 .weight(1f)
                 .fillMaxWidth(),
         ) {
-            EmptyState(greeting = state.greeting)
+            if (state.isEmpty) {
+                EmptyState(greeting = state.greeting)
+            } else {
+                MessageStream(
+                    messages = state.messages,
+                    sessionTokens = state.sessionTokens,
+                    onToggleReasoning = onToggleReasoning,
+                    onCopy = onCopyMessage,
+                    onSpeak = onSpeakMessage,
+                    onShare = onShareMessage,
+                    onRegenerate = onRegenerate,
+                    onRetry = onRetryMessage,
+                    onBranchPrev = onBranchPrev,
+                    onBranchNext = onBranchNext,
+                )
+                BottomFadeMask(
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    height = if (imeBottomPx > 0) 0 else 28,
+                )
+            }
         }
 
         DsInputBar(
