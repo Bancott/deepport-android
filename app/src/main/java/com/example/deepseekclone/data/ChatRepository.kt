@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.data
+package com.example.deepseekclone.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -32,12 +32,14 @@ class ChatRepository {
         model: String,
         messages: List<ChatMessage>,
         maxTokens: Int = 1024,
+        effort: String? = null,
     ): Flow<StreamEvent> = flow {
         val url = baseUrl.trimEnd('/') + "/chat/completions"
         val body = JSONObject().apply {
             put("model", model)
             put("stream", true)
             put("max_tokens", maxTokens)
+            effort?.let { put("effort", it) }
             put("stream_options", JSONObject().put("include_usage", true))
             put(
                 "messages",
@@ -130,3 +132,4 @@ private fun JSONObject.optText(key: String): String? {
     if (!has(key) || isNull(key)) return null
     return optString(key).takeIf { it.isNotEmpty() }
 }
+

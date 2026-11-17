@@ -128,11 +128,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 val now = System.currentTimeMillis()
                 if (!force && now - lastFlush < 60) return
                 lastFlush = now
-                val seconds = if (firstContentAt > 0) {
-                    ((firstContentAt - startedAt) / 1000).toInt().coerceAtLeast(0)
-                } else {
-                    ((now - startedAt) / 1000).toInt().coerceAtLeast(0)
-                }
+                val elapsed = if (firstContentAt > 0) firstContentAt - startedAt else now - startedAt
+                // 推理很快时也至少显示 1 秒，避免出现"用时 0 秒"
+                val seconds = ((elapsed / 1000).toInt()).coerceAtLeast(1)
                 _state.update { st ->
                     st.copy(
                         messages = st.messages.map { m ->
@@ -157,6 +155,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                     apiKey = apiKey,
                     model = model,
                     messages = history,
+                    // 深度思考开关 → effort：开=max，关=low
+                    effort = if (current.input.deepThinking) "max" else "low",
                 ).collect { event ->
                     when (event) {
                         is StreamEvent.Reasoning -> {
@@ -263,6 +263,8 @@ private fun ChatUiState.updateMessage(
     id: String,
     block: (MessageUi) -> MessageUi,
 ): ChatUiState = copy(messages = messages.map { if (it.id == id) block(it) else it })
+
+
 
 
 
