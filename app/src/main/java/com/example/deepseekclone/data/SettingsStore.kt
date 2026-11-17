@@ -9,7 +9,7 @@ import androidx.compose.runtime.setValue
  * 本地配置存储（Data 层最小实现）。
  * 后续换成 DataStore / Room 时，只替换这里，UI 不用动。
  */
-class SettingsStore(context: Context) {
+class SettingsStore private constructor(context: Context) {
 
     private val prefs = context.applicationContext
         .getSharedPreferences("ds_settings", Context.MODE_PRIVATE)
@@ -51,6 +51,13 @@ class SettingsStore(context: Context) {
     }
 
     companion object {
+        @Volatile
+        private var instance: SettingsStore? = null
+
+        fun get(context: Context): SettingsStore = instance ?: synchronized(this) {
+            instance ?: SettingsStore(context).also { instance = it }
+        }
+
         const val DEFAULT_BASE = "https://api.deepseek.com"
         /** 模型 id 由 GET /models 决定，本地不写死 */
         const val DEFAULT_MODEL = ""
@@ -64,4 +71,5 @@ class SettingsStore(context: Context) {
         private const val KEY_MODEL = "model"
     }
 }
+
 
