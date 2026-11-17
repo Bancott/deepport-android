@@ -202,13 +202,7 @@ private fun App() {
                         vm.open(conversation.id)
                         drawerOpen = false
                     },
-                    onLongPress = { conversation ->
-                        drawer = drawer.copy(
-                            groups = drawer.groups.map { group ->
-                                group.copy(items = group.items.filterNot { it.id == conversation.id })
-                            },
-                        )
-                    },
+                    onLongPress = { },
                     onPin = { conversation ->
                         drawer = drawer.copy(
                             groups = drawer.groups.map { group ->
@@ -237,6 +231,7 @@ private fun App() {
                         drawer = drawer.copy(multiSelect = false, selectedIds = emptySet())
                     },
                     onDeleteSelected = {
+                        drawer.selectedIds.forEach { vm.deleteConversation(it) }
                         val ids = drawer.selectedIds
                         drawer = drawer.copy(
                             multiSelect = false,
@@ -299,6 +294,7 @@ private fun demoConversations(): List<ConversationGroup> = listOf(
         ),
     ),
 )
+
 
 
 
