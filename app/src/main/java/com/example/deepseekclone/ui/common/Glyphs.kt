@@ -10,6 +10,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -124,3 +125,30 @@ fun StopSquareGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 
     }
 }
 
+
+/**
+ * 上传/发送：与麦克风等大的描边圆 + 居中向上箭头（官方输入框有文字时就是这个按钮）
+ * stroke 1.9dp、圆直径 24.6dp，箭头占圆内约 46%，比单纯箭头更醒目
+ */
+@Composable
+fun SendCircleGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 24.6.dp) {
+    Canvas(modifier = modifier.size(iconSize)) {
+        val s = size.minDimension
+        val stroke = s * 0.077f
+        val r = s / 2f - stroke / 2f
+        drawCircle(
+            color = color,
+            radius = r,
+            style = Stroke(width = stroke),
+        )
+        // 箭头：杆 + 两撇，整体占圆直径的 ~46%
+        val cx = center.x
+        val topY = s * 0.30f
+        val bottomY = s * 0.70f
+        val headX = s * 0.115f
+        val headY = s * 0.415f
+        drawLine(color, Offset(cx, bottomY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
+        drawLine(color, Offset(cx - headX, headY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
+        drawLine(color, Offset(cx + headX, headY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
+    }
+}

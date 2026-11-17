@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.ui.common.CircleIconButton
+import com.example.deepseekclone.ui.common.SendCircleGlyph
 import com.example.deepseekclone.ui.common.DeepThinkGlyph
 import com.example.deepseekclone.ui.common.DsAssistChip
 import com.example.deepseekclone.ui.common.GlobeGlyph
@@ -263,31 +264,40 @@ private fun ActionRow(
             onClick = onAttachClick,
         ) { PlusCircleGlyph(color = colors.textPrimary, iconSize = 25.dp) }
 
-        // 麦克风/键盘常驻；发送或停止作为"第三个按钮"出现在它右边（官方同一行三个）
-        CircleIconButton(
-            contentDescription = if (state.mode == InputMode.Text) {
-                "切换到按住说话"
-            } else {
-                "切换到键盘输入"
-            },
-            onClick = onToggleMode,
-        ) {
-            if (state.mode == InputMode.Text) {
-                VoiceGlyph(color = colors.textPrimary, iconSize = 25.dp)
-            } else {
-                Icon(
-                    imageVector = Icons.Outlined.Keyboard,
-                    contentDescription = null,
-                    tint = colors.textPrimary,
-                    modifier = Modifier.size(26.dp),
-                )
+        // 第二个位置：有文字时"语音按钮"就地变成等大的上传（发送）按钮；
+        // 没有文字时是麦克风 / 语音模式下是键盘。
+        if (state.canSend && !generating) {
+            CircleIconButton(
+                contentDescription = "发送",
+                onClick = onSend,
+            ) { SendCircleGlyph(color = colors.primary, iconSize = 24.6.dp) }
+        } else {
+            CircleIconButton(
+                contentDescription = if (state.mode == InputMode.Text) {
+                    "切换到按住说话"
+                } else {
+                    "切换到键盘输入"
+                },
+                onClick = onToggleMode,
+            ) {
+                if (state.mode == InputMode.Text) {
+                    VoiceGlyph(color = colors.textPrimary, iconSize = 25.dp)
+                } else {
+                    Icon(
+                        imageVector = Icons.Outlined.Keyboard,
+                        contentDescription = null,
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(26.dp),
+                    )
+                }
             }
         }
 
-        if (generating || state.canSend) {
+        // 第三个位置：模型开始工作后才"新增"出来的暂停按钮
+        if (generating) {
             SendOrStopButton(
-                generating = generating,
-                enabled = generating || state.canSend,
+                generating = true,
+                enabled = true,
                 onSend = onSend,
                 onStop = onStop,
             )
@@ -326,6 +336,7 @@ private fun SendOrStopButton(
         }
     }
 }
+
 
 
 
