@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -358,7 +359,8 @@ private fun MessageActionBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 12.dp),
+            .padding(top = 8.dp)
+            .height(40.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (message.branchCount > 1) {
@@ -537,14 +539,25 @@ private fun TokenInline(message: MessageUi, sessionTokens: Int) {
             append(formatTokens(sessionTokens))
         }
     }
-    Text(
-        text = text,
-        style = DsText.caption.copy(fontSize = 13.sp),
-        color = colors.textSecondary,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.padding(horizontal = 4.dp),
-    )
+    Box(
+        modifier = Modifier
+            .height(40.dp)
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = DsText.caption.copy(
+                fontSize = 13.sp,
+                lineHeight = 16.sp,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            ),
+            color = colors.textSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
+
 
 
