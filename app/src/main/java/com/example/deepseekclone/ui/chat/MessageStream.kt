@@ -9,6 +9,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -133,22 +135,30 @@ private fun UserMessage(message: MessageUi) {
             .padding(start = 72.dp, end = 16.dp, top = 14.dp),
         horizontalArrangement = Arrangement.End,
     ) {
-        Surface(
-            color = colors.bubble,
-            shape = RoundedCornerShape(20.dp),
+        val menuExpanded = remember { mutableStateOf(false) }
+        MessageLongPressBox(
+            message = message,
+            expanded = menuExpanded.value,
+            onExpandedChange = { menuExpanded.value = it },
         ) {
-            Text(
-                text = message.text,
-                style = DsText.bodyTight,
-                color = colors.textPrimary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            )
+            Surface(
+                color = colors.bubble,
+                shape = RoundedCornerShape(20.dp),
+            ) {
+                Text(
+                    text = message.text,
+                    style = DsText.bodyTight,
+                    color = colors.textPrimary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
+            }
         }
     }
 }
 
 /* ----------------------------- AI 回答 ----------------------------- */
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AssistantMessage(
     message: MessageUi,
@@ -164,11 +174,22 @@ private fun AssistantMessage(
 ) {
     val colors = DsTheme.colors
     val streaming = message.status == MessageStatus.Streaming || message.status == MessageStatus.Reasoning
+    val menuExpanded = remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 24.dp, end = 24.dp, top = 16.dp),
+            .padding(start = 24.dp, end = 24.dp, top = 16.dp)
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { menuExpanded.value = true },
+            ),
     ) {
+        MessageLongPressBox(
+            message = message,
+            expanded = menuExpanded.value,
+            onExpandedChange = { menuExpanded.value = it },
+            onRegenerate = onRegenerate,
+        ) {}
         if (message.reasoning.isNotBlank() || message.status == MessageStatus.Reasoning) {
             ReasoningSection(
                 message = message,
@@ -579,4 +600,29 @@ private fun TokenInline(message: MessageUi, sessionTokens: Int) {
 
 
 
+
+
+
+
+
+/**
+ * AI 消息的长按菜单锚点：靠一个不可见 Box 承载 DropdownMenu，
+ * 长按判定挂在消息 Column 上（见 AssistantMessage 的 combinedClickable）。
+ */
+@Composable
+private fun LongPressHint(
+    message: MessageUi,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onRegenerate: () -> Unit,
+) {
+    Box {
+        MessageLongPressBox(
+            message = message,
+            expanded = expanded,
+            onExpandedChange = onExpandedChange,
+            onRegenerate = onRegenerate,
+        ) {}
+    }
+}
 
