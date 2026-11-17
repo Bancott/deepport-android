@@ -197,13 +197,13 @@ fun PushDrawerLayout(
                 }
 
                 // 卡片左缘 1dp 高光（官方 ≈ #2B2B2B）
-                if (!isLight && pageLifted.value) {
+                if (pageLifted.value) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
                             .fillMaxHeight()
                             .width(1.dp)
-                            .background(Color.White.copy(alpha = 0.07f * progress)),
+                            .background(if (isLight) Color.Black.copy(alpha = 0.06f * progress) else Color.White.copy(alpha = 0.07f * progress)),
                     )
                 }
             }
@@ -223,6 +223,7 @@ fun PushDrawerLayout(
         }
     }
 }
+
 
 
 
