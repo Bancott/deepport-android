@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -17,8 +17,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -30,10 +32,14 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
- * 官方抽屉动画："推页式"。
- * 打开方式有两种：点左上角菜单、或从左侧边缘右滑；打开过程中页面整体右移 82%，
- * 底色换成"被抬起"的表面色，内容透明度随进度下降到 38%，四角切 16dp 圆角。
- * 打开状态下向左滑动或点击右侧露出的页面区域即可关闭。
+ * 官方抽屉动画（推页式）。层级关系：**抽屉在最底，会话页作为卡片浮在上面**。
+ *
+ * 打开时：
+ * - 抽屉从左侧滑入（-W → 0），跟手 1:1；
+ * - 会话页右移、缩小到 0.93、内容淡到 38%，四角切 20dp 圆角，左缘一条 1dp 高光；
+ * - 页面位移用 p^2.2，比抽屉"慢半拍"，所以抽屉看起来是从页面身后露出来的。
+ *
+ * 手势：页面任意位置右滑打开、左滑关闭、点击露出的页面区域关闭。
  */
 @Composable
 fun PushDrawerLayout(
@@ -60,6 +66,10 @@ fun PushDrawerLayout(
             .fillMaxSize()
             .background(colors.bg),
     ) {
+        val density = LocalDensity.current
+        val drawerWidth = maxWidth * drawerWidthFraction
+        val drawerWidthPx = with(density) { drawerWidth.toPx() }
+
         fun settle(open: Boolean) {
             onDrawerOpenChange(open)
             scope.launch {
@@ -70,21 +80,13 @@ fun PushDrawerLayout(
             }
         }
 
-        val density = LocalDensity.current
-        val drawerWidth = maxWidth * drawerWidthFraction
-        val drawerWidthPx = with(density) { drawerWidth.toPx() }
-
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(drawerOpen, drawerWidthPx) {
                     var dragging = false
                     detectHorizontalDragGestures(
-                        onDragStart = {
-                            // 关闭态：页面任意位置右滑都可打开（垂直滚动不受影响）；
-                            // 打开态：任意位置左滑关闭。避开系统返回手势的极左边缘。
-                            dragging = true
-                        },
+                        onDragStart = { dragging = true },
                         onHorizontalDrag = { change, dragAmount ->
                             if (dragging) {
                                 change.consume()
@@ -108,38 +110,59 @@ fun PushDrawerLayout(
                     )
                 },
         ) {
-            // 被推开的"卡片"：底色是提亮后的表面色，内容整体淡出
+            /* ---------- 1. 抽屉（最底层） ---------- */
+            Box(
+                modifier = Modifier
+                    .width(drawerWidth)
+                    .fillMaxHeight()
+                    .offset {
+                        IntOffset((-drawerWidthPx + drawerWidthPx * progress.value).roundToInt(), 0)
+                    },
+            ) {
+                drawer(Modifier.fillMaxSize())
+            }
+
+            /* ---------- 2. 会话页（上层卡片，随推页右移 + 缩小 + 变淡） ---------- */
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(colors.pushedPage)
                     .graphicsLayer {
-                        // 页面比抽屉"慢半拍"（p^1.7），同时轻微缩小、变淡 —— 形成前后的纵深感，
-                        // 不是单纯的水平平移。
-                        val pageP = progress.value.pow(1.7f)
+                        val pageP = progress.value.pow(2.2f)
                         translationX = drawerWidthPx * pageP
-                        val s = 1f - 0.035f * pageP
+                        val s = 1f - 0.07f * pageP
                         scaleX = s
                         scaleY = s
                         if (progress.value > 0.01f) {
                             clip = true
-                            shape = RoundedCornerShape(16.dp)
+                            shape = RoundedCornerShape(20.dp)
                         }
-                    },
+                    }
+                    .background(colors.pushedPage),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                        val pageP = progress.value.pow(1.7f)
-                        alpha = 1f - 0.62f * pageP * pageP
-                    },
+                            val pageP = progress.value.pow(2.2f)
+                            alpha = 1f - 0.62f * pageP
+                        },
                 ) {
                     content()
                 }
+
+                // 卡片左缘 1dp 高光（官方截图 ≈ #2B2B2B），强化"浮起的一层"
+                if (progress.value > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .fillMaxHeight()
+                            .width(1.dp)
+                            .background(Color.White.copy(alpha = 0.07f * progress.value)),
+                    )
+                }
             }
 
-            // 点击右侧露出的页面区域关闭
+            /* ---------- 3. 点击露出的页面区域关闭 ---------- */
             if (progress.value > 0.01f) {
                 Box(
                     modifier = Modifier
@@ -148,21 +171,6 @@ fun PushDrawerLayout(
                         .clickable { onDrawerOpenChange(false) },
                 )
             }
-
-            Box(
-                modifier = Modifier
-                    .width(drawerWidth)
-                    .fillMaxHeight()
-                    .offset {
-                        IntOffset((-drawerWidthPx + drawerWidthPx * progress.value).roundToInt(), 0)
-                    }
-                    .clip(RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)),
-            ) {
-                drawer(Modifier.fillMaxSize())
-            }
         }
     }
 }
-
-
-
