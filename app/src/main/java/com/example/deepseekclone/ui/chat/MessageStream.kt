@@ -57,6 +57,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -80,6 +82,8 @@ fun MessageStream(
     onShare: (MessageUi) -> Unit = {},
     onRegenerate: (MessageUi) -> Unit = {},
     onRetry: (MessageUi) -> Unit = {},
+    onEdit: (MessageUi) -> Unit = {},
+    onSourcesClick: (MessageUi) -> Unit = {},
     onBranchPrev: (MessageUi) -> Unit = {},
     onBranchNext: (MessageUi) -> Unit = {},
 ) {
@@ -106,7 +110,7 @@ fun MessageStream(
     ) {
         items(messages, key = { it.id }) { message ->
             when (message.role) {
-                ChatRole.User -> UserMessage(message)
+                ChatRole.User -> UserMessage(message = message, onEdit = { onEdit(message) })
                 ChatRole.Assistant -> AssistantMessage(
                     message = message,
                     sessionTokens = sessionTokens,
@@ -116,6 +120,7 @@ fun MessageStream(
                     onShare = { onShare(message) },
                     onRegenerate = { onRegenerate(message) },
                     onRetry = { onRetry(message) },
+                    onSourcesClick = { onSourcesClick(message) },
                     onBranchPrev = { onBranchPrev(message) },
                     onBranchNext = { onBranchNext(message) },
                 )
@@ -127,7 +132,7 @@ fun MessageStream(
 /* ----------------------------- 用户气泡 ----------------------------- */
 
 @Composable
-private fun UserMessage(message: MessageUi) {
+private fun UserMessage(message: MessageUi, onEdit: () -> Unit) {
     val colors = DsTheme.colors
     Row(
         modifier = Modifier
@@ -140,6 +145,7 @@ private fun UserMessage(message: MessageUi) {
             message = message,
             expanded = menuExpanded.value,
             onExpandedChange = { menuExpanded.value = it },
+            onEdit = onEdit,
         ) {
             Column(horizontalAlignment = Alignment.End) {
                 if (message.attachments.isNotEmpty()) {
@@ -176,6 +182,7 @@ private fun AssistantMessage(
     onShare: () -> Unit,
     onRegenerate: () -> Unit,
     onRetry: () -> Unit,
+    onSourcesClick: () -> Unit,
     onBranchPrev: () -> Unit,
     onBranchNext: () -> Unit,
 ) {
@@ -232,7 +239,7 @@ private fun AssistantMessage(
         if (message.status == MessageStatus.Completed || message.status == MessageStatus.Aborted) {
             if (message.sourcesCount > 0) {
                 Spacer(Modifier.height(14.dp))
-                SourcesPill(count = message.sourcesCount)
+                SourcesPill(count = message.sourcesCount, onClick = onSourcesClick)
             }
             MessageActionBar(
                 message = message,
@@ -378,12 +385,13 @@ private fun ErrorTurn(hint: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun SourcesPill(count: Int) {
+private fun SourcesPill(count: Int, onClick: () -> Unit) {
     val colors = DsTheme.colors
     Row(
         modifier = Modifier
             .clip(CircleShape)
             .background(colors.surface2)
+            .clickable(role = Role.Button, onClickLabel = "查看来源", onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -501,7 +509,9 @@ private fun ActionIcon(
         modifier = Modifier
             .size(40.dp)
             .clip(CircleShape)
-            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick),
+            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+            // 动作条用的是矢量图（SvgIcon 内部 contentDescription 为 null），这里补语义给读屏和自动化
+            .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
         icon(colors.textSecondary)

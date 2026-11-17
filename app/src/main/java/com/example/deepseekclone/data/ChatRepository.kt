@@ -1,7 +1,9 @@
 package com.example.deepseekclone.data
 
+import com.example.deepseekclone.ui.chat.SourceItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import org.json.JSONArray
@@ -16,6 +18,8 @@ sealed interface StreamEvent {
     data class Reasoning(val delta: String) : StreamEvent
     data class Content(val delta: String) : StreamEvent
     data class Usage(val promptTokens: Int, val completionTokens: Int, val reasoningTokens: Int) : StreamEvent
+    /** 接口回传的联网搜索结果（不同网关字段名不一样，统一归一化成 SourceItem） */
+    data class Sources(val items: List<SourceItem>) : StreamEvent
     data object Done : StreamEvent
 }
 
@@ -31,8 +35,10 @@ class ChatRepository {
         apiKey: String,
         model: String,
         messages: List<ChatMessage>,
-        maxTokens: Int = 1024,
+        // 深度思考会把思考过程也算进输出额度，1024 常常刚想完就没正文了，这里放到接口上限
+        maxTokens: Int = 8192,
         effort: String? = null,
+        enableSearch: Boolean = false,
     ): Flow<StreamEvent> = flow {
         val url = baseUrl.trimEnd('/') + "/chat/completions"
         val body = JSONObject().apply {
@@ -40,6 +46,8 @@ class ChatRepository {
             put("stream", true)
             put("max_tokens", maxTokens)
             effort?.let { put("effort", it) }
+            // 智能搜索：带上 search 标记，网关支持就真的联网（DeepSeek 官方接口不支持，见下面的 400 兜底）
+            if (enableSearch) put("search", true)
             put("stream_options", JSONObject().put("include_usage", true))
             put(
                 "messages",
@@ -67,6 +75,22 @@ class ChatRepository {
             val code = conn.responseCode
             if (code !in 200..299) {
                 val err = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                // 有些供应商不认 search 字段会直接 400：静默退回不带搜索的请求，别让用户看到报错
+                if (code == 400 && enableSearch) {
+                    conn.disconnect()
+                    emitAll(
+                        streamChat(
+                            baseUrl = baseUrl,
+                            apiKey = apiKey,
+                            model = model,
+                            messages = messages,
+                            maxTokens = maxTokens,
+                            effort = effort,
+                            enableSearch = false,
+                        ),
+                    )
+                    return@flow
+                }
                 throw IllegalStateException(describeHttpError(code, err))
             }
 
@@ -90,6 +114,8 @@ class ChatRepository {
                             }
                         }
                     }
+
+                    parseSources(obj)?.takeIf { it.isNotEmpty() }?.let { emit(StreamEvent.Sources(it)) }
 
                     obj.optJSONObject("usage")?.let { usage ->
                         val reasoning = usage
@@ -160,6 +186,39 @@ class ChatRepository {
         } finally {
             conn.disconnect()
         }
+    }
+
+    /**
+     * 从一帧里找搜索结果。常见字段：search_results / references / sources / web_search_results，
+     * 每一项用 title|name、url|link、snippet|content|summary 的任意组合。
+     */
+    private fun parseSources(obj: JSONObject): List<SourceItem>? {
+        val keys = listOf("search_results", "references", "sources", "web_search_results")
+        for (key in keys) {
+            val arr = obj.optJSONArray(key) ?: continue
+            val items = mutableListOf<SourceItem>()
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val url = firstOf(o, "url", "link", "href")
+                val title = firstOf(o, "title", "name", "site_name")
+                if (url.isBlank() && title.isBlank()) continue
+                items += SourceItem(
+                    title = title.ifBlank { url },
+                    url = url,
+                    snippet = firstOf(o, "snippet", "content", "summary", "description"),
+                )
+            }
+            if (items.isNotEmpty()) return items
+        }
+        return null
+    }
+
+    private fun firstOf(o: JSONObject, vararg keys: String): String {
+        keys.forEach { key ->
+            val value = o.optString(key)
+            if (value.isNotBlank() && value != "null") return value
+        }
+        return ""
     }
 
     private fun describeHttpError(code: Int, body: String): String {        val detail = runCatching {

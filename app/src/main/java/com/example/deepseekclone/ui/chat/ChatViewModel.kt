@@ -8,6 +8,7 @@ import com.example.deepseekclone.data.ChatRepository
 import com.example.deepseekclone.data.ChatStore
 import com.example.deepseekclone.data.ConversationStore
 import com.example.deepseekclone.data.SettingsStore
+import com.example.deepseekclone.data.Speaker
 import com.example.deepseekclone.data.StreamEvent
 import com.example.deepseekclone.data.StoredConversation
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val settings = SettingsStore.get(app)
     private val store = ConversationStore(app)
     private val repository = ChatRepository()
+    private val speaker = Speaker(app)
     private var currentId: String = ""
 
     /** 全部消息节点（插入顺序 = 创建顺序，兄弟节点顺序即分支顺序） */
@@ -115,6 +117,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         if (id == currentId) return
         streamJob?.cancel()
         streamJob = null
+        speaker.stop()
         val target = store.loadAll().firstOrNull { it.id == id } ?: return
         bind(target)
     }
@@ -122,6 +125,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     fun newChat() {
         streamJob?.cancel()
         streamJob = null
+        speaker.stop()
         currentId = store.newId()
         nodes.clear()
         activeChild.clear()
@@ -258,7 +262,24 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         it.copy(input = it.input.copy(transcribedNotice = null))
     }
 
-    fun toggleSpeechOutput() = _state.update { it.copy(isSpeechOutputOn = !it.isSpeechOutputOn) }
+    fun toggleSpeechOutput() {
+        val enabled = !_state.value.isSpeechOutputOn
+        if (!enabled) speaker.stop()
+        _state.update { it.copy(isSpeechOutputOn = enabled) }
+    }
+
+    /** 动作条的喇叭：朗读这一条回答；没有正文时返回 false 让 UI 给个提示 */
+    fun speakMessage(message: MessageUi): Boolean {
+        val text = Speaker.plainText(message.text)
+        if (text.isBlank()) return false
+        speaker.speak(text)
+        return true
+    }
+
+    override fun onCleared() {
+        speaker.shutdown()
+        super.onCleared()
+    }
 
     fun addAttachments(items: List<AttachmentUi>) = _state.update {
         it.copy(input = it.input.copy(attachments = (it.input.attachments + items).take(9)))
@@ -401,6 +422,41 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         startStream(assistantId, parentKey)
     }
 
+    /** 编辑用户消息：在同一个父节点下新建用户节点（兄弟分支），然后重新回答 */
+    fun editUserMessage(message: MessageUi, newText: String) {
+        val clean = newText.trim()
+        if (clean.isEmpty() || clean == message.text) return
+        if (_state.value.isGenerating) return
+        if (message.role != ChatRole.User) return
+
+        val userId = newId("u")
+        val assistantId = newId("a")
+        nodes[userId] = message.copy(
+            id = userId,
+            text = clean,
+            status = MessageStatus.Sent,
+            reasoning = "",
+            reasoningSeconds = 0,
+            reasoningExpanded = false,
+            usage = null,
+            errorHint = null,
+            branchIndex = 1,
+            branchCount = 1,
+        )
+        nodes[assistantId] = MessageUi(
+            id = assistantId,
+            role = ChatRole.Assistant,
+            parentId = userId,
+            status = MessageStatus.Connecting,
+        )
+        activeChild[message.parentId.orEmpty()] = userId
+        activeChild[userId] = assistantId
+        _state.update {
+            it.copy(generation = GenerationState.Connecting, messages = activePath())
+        }
+        startStream(assistantId, userId)
+    }
+
     /** 失败重试：复用同一节点原地重跑，不产生多余分支 */
     fun retry(message: MessageUi) {
         if (_state.value.isGenerating) return
@@ -456,9 +512,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             ChatMessage(role = if (it.role == ChatRole.User) "user" else "assistant", content = promptFor(it))
         }
         val effort = if (_state.value.input.deepThinking) "max" else "low"
+        val enableSearch = _state.value.input.smartSearch
 
         streamJob = viewModelScope.launch {
-            streamInto(assistantId, baseUrl, apiKey, model, history, effort)
+            streamInto(assistantId, baseUrl, apiKey, model, history, effort, enableSearch)
         }
     }
 
@@ -469,6 +526,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         model: String,
         history: List<ChatMessage>,
         effort: String,
+        enableSearch: Boolean,
     ) {
         val startedAt = System.currentTimeMillis()
         val reasoning = StringBuilder()
@@ -476,6 +534,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         var lastFlush = 0L
         var firstContentAt = 0L
         var usage: TokenUsage? = null
+        var sources: List<SourceItem> = emptyList()
 
         fun flush(force: Boolean = false) {
             val now = System.currentTimeMillis()
@@ -490,6 +549,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 text = content.toString(),
                 reasoningSeconds = seconds,
                 usage = usage,
+                sources = sources,
+                sourcesCount = sources.size,
             )
             _state.update { it.copy(messages = activePath()) }
         }
@@ -502,6 +563,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 messages = history,
                 // 深度思考开关 → effort：开=max，关=low
                 effort = effort,
+                // 智能搜索开关 → 请求体带 search
+                enableSearch = enableSearch,
             ).collect { event ->
                 when (event) {
                     is StreamEvent.Reasoning -> {
@@ -545,6 +608,17 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         )
                     }
 
+                    is StreamEvent.Sources -> {
+                        sources = event.items
+                        nodes[assistantId]?.let {
+                            nodes[assistantId] = it.copy(
+                                sources = event.items,
+                                sourcesCount = event.items.size,
+                            )
+                        }
+                        _state.update { it.copy(messages = activePath()) }
+                    }
+
                     StreamEvent.Done -> Unit
                 }
             }
@@ -560,6 +634,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             persist()
+            // 顶栏朗读开关打开时，回答生成完自动读一遍
+            if (_state.value.isSpeechOutputOn) {
+                val finished = nodes[assistantId]
+                val text = finished?.let { Speaker.plainText(it.text) }.orEmpty()
+                if (text.isNotBlank()) speaker.speak(text)
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             flush(force = true)
             nodes[assistantId]?.let {

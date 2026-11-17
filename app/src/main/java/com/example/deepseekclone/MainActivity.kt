@@ -1,6 +1,11 @@
 package com.example.deepseekclone
 
 import android.os.Bundle
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -35,6 +40,7 @@ import com.example.deepseekclone.ui.chat.ConfirmDialog
 import com.example.deepseekclone.ui.chat.ConversationDrawer
 import com.example.deepseekclone.ui.chat.ConversationUi
 import com.example.deepseekclone.ui.chat.DrawerUiState
+import com.example.deepseekclone.ui.chat.EditMessageDialog
 import com.example.deepseekclone.ui.chat.PushDrawerLayout
 import com.example.deepseekclone.ui.chat.RenameConversationDialog
 import com.example.deepseekclone.ui.chat.SearchScreen
@@ -108,6 +114,7 @@ private fun App() {
     var drawer by remember { mutableStateOf(DrawerUiState()) }
     var renameTarget by remember { mutableStateOf<ConversationUi?>(null) }
     var deleteTarget by remember { mutableStateOf<ConversationUi?>(null) }
+    var editTarget by remember { mutableStateOf<com.example.deepseekclone.ui.chat.MessageUi?>(null) }
     var showAppearance by remember { mutableStateOf(false) }
     var showLanguage by remember { mutableStateOf(false) }
     var webTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -196,6 +203,14 @@ private fun App() {
                 refreshDrawer()
             },
             onDismiss = { deleteTarget = null },
+        )
+    }
+
+    editTarget?.let { target ->
+        EditMessageDialog(
+            initial = target.text,
+            onConfirm = { newText -> vm.editUserMessage(target, newText) },
+            onDismiss = { editTarget = null },
         )
     }
 
@@ -357,6 +372,24 @@ private fun App() {
                 onRetryMessage = { vm.retry(it) },
                 onBranchPrev = { vm.selectBranch(it, -1) },
                 onBranchNext = { vm.selectBranch(it, 1) },
+                onEditMessage = { editTarget = it },
+                onCopyMessage = { message ->
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("message", message.text))
+                    Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                },
+                onSpeakMessage = { message ->
+                    if (!vm.speakMessage(message)) {
+                        Toast.makeText(context, "这条回答还没有可朗读的正文", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onShareMessage = { message ->
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, message.text)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "分享"))
+                },
             )
         }
     }

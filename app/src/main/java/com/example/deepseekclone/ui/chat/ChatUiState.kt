@@ -43,6 +43,19 @@ data class TokenUsage(
     val total: Int get() = prompt + completion
 }
 
+/** 联网搜索来源（回答下方「N 个网页」展开的内容） */
+data class SourceItem(
+    val title: String,
+    val url: String,
+    val snippet: String = "",
+) {
+    /** 用于列表上显示的站点名 */
+    val host: String
+        get() = runCatching { java.net.URI(url).host.orEmpty().removePrefix("www.") }
+            .getOrDefault("")
+            .ifBlank { url.take(32) }
+}
+
 /**
  * 消息模型。会话是一棵树，`id` 稳定、`parentId` 指父节点；
  * 分支切换只影响"父节点选了哪个子节点"，由 ViewModel 算好 active path 再传下来。
@@ -62,6 +75,8 @@ data class MessageUi(
     val reasoningExpanded: Boolean = false,
     /** 联网搜索来源数量，0 表示不显示来源 pill */
     val sourcesCount: Int = 0,
+    /** 来源明细（接口有返回才填） */
+    val sources: List<SourceItem> = emptyList(),
     /** 分支切换器：第几条 / 共几条（派生，不持久化） */
     val branchIndex: Int = 1,
     val branchCount: Int = 1,

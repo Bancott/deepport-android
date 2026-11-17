@@ -114,6 +114,89 @@ fun RenameConversationDialog(
     }
 }
 
+/** 编辑用户消息：多行输入，确认后作为新分支重新回答 */
+@Composable
+fun EditMessageDialog(
+    initial: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = DsTheme.colors
+    var value by remember {
+        mutableStateOf(TextFieldValue(initial, selection = TextRange(initial.length)))
+    }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(colors.dialog),
+        ) {
+            Text(
+                text = "编辑消息",
+                style = DsText.h2.copy(fontSize = 19.sp),
+                color = colors.textPrimary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 22.dp, bottom = 16.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            BasicTextField(
+                value = value,
+                onValueChange = { if (it.text.length <= 4000) value = it },
+                textStyle = DsText.body.copy(fontSize = 16.sp, color = colors.textPrimary),
+                cursorBrush = SolidColor(colors.primary),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.fieldBg)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .focusRequester(focus),
+                decorationBox = { inner ->
+                    Box {
+                        if (value.text.isEmpty()) {
+                            Text("输入消息", style = DsText.body.copy(fontSize = 16.sp), color = colors.textTertiary)
+                        }
+                        inner()
+                    }
+                },
+            )
+            Text(
+                text = "发送后会作为新分支重新回答，原答案保留在 ‹n/m› 里",
+                style = DsText.caption.copy(fontSize = 12.sp),
+                color = colors.textTertiary,
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+            ) {
+                DialogTextButton(
+                    text = "取消",
+                    color = colors.textSecondary,
+                    modifier = Modifier.weight(1f),
+                    onClick = onDismiss,
+                )
+                DialogTextButton(
+                    text = "发送",
+                    color = colors.primary,
+                    modifier = Modifier.weight(1f),
+                    enabled = value.text.isNotBlank() && value.text != initial,
+                    onClick = {
+                        onConfirm(value.text)
+                        onDismiss()
+                    },
+                )
+            }
+        }
+    }
+}
+
 /** 删除确认（单个 / 多选共用） */
 @Composable
 fun ConfirmDialog(

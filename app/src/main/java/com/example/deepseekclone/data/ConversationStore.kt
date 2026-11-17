@@ -5,6 +5,7 @@ import com.example.deepseekclone.ui.chat.AttachmentUi
 import com.example.deepseekclone.ui.chat.ChatRole
 import com.example.deepseekclone.ui.chat.MessageStatus
 import com.example.deepseekclone.ui.chat.MessageUi
+import com.example.deepseekclone.ui.chat.SourceItem
 import com.example.deepseekclone.ui.chat.TokenUsage
 import org.json.JSONArray
 import org.json.JSONObject
@@ -173,6 +174,9 @@ class ConversationStore(context: Context) {
                     if (m.attachments.isNotEmpty()) {
                         put("attachments", attachmentsToJson(m.attachments))
                     }
+                    if (m.sources.isNotEmpty()) {
+                        put("sources", sourcesToJson(m.sources))
+                    }
                 },
             )
         }
@@ -191,6 +195,7 @@ class ConversationStore(context: Context) {
                     reasoning = it.optInt("reasoning"),
                 )
             }
+            val sources = parseSources(o.optJSONArray("sources"))
             list += MessageUi(
                 id = o.optString("id", "m-$i"),
                 role = if (o.optString("role") == "user") ChatRole.User else ChatRole.Assistant,
@@ -203,6 +208,8 @@ class ConversationStore(context: Context) {
                 reasoningExpanded = o.optBoolean("reasoningExpanded"),
                 parentId = if (o.has("parentId") && !o.isNull("parentId")) o.optString("parentId") else null,
                 attachments = parseAttachments(o.optJSONArray("attachments")),
+                sources = sources,
+                sourcesCount = sources.size,
             )
         }
         return list
@@ -222,6 +229,33 @@ class ConversationStore(context: Context) {
             )
         }
         return arr
+    }
+
+    private fun sourcesToJson(list: List<SourceItem>): JSONArray {
+        val arr = JSONArray()
+        list.forEach { item ->
+            arr.put(
+                JSONObject().apply {
+                    put("title", item.title)
+                    put("url", item.url)
+                    put("snippet", item.snippet)
+                },
+            )
+        }
+        return arr
+    }
+
+    private fun parseSources(arr: JSONArray?): List<SourceItem> {
+        if (arr == null) return emptyList()
+        val list = mutableListOf<SourceItem>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val url = o.optString("url")
+            val title = o.optString("title")
+            if (url.isBlank() && title.isBlank()) continue
+            list += SourceItem(title = title.ifBlank { url }, url = url, snippet = o.optString("snippet"))
+        }
+        return list
     }
 
     private fun parseAttachments(arr: JSONArray?): List<AttachmentUi> {

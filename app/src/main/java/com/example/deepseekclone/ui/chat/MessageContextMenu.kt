@@ -31,6 +31,7 @@ fun MessageLongPressBox(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     onRegenerate: () -> Unit = {},
+    onEdit: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -54,7 +55,12 @@ fun MessageLongPressBox(
         add(MenuAction("复制") { copyToClipboard(); onExpandedChange(false) })
         add(MenuAction("选择文本") { onExpandedChange(false) })
         if (isUser) {
-            add(MenuAction("编辑") { onExpandedChange(false) })
+            add(
+                MenuAction("编辑") {
+                    onEdit()
+                    onExpandedChange(false)
+                },
+            )
         } else {
             add(MenuAction("重新生成") { onRegenerate(); onExpandedChange(false) })
             add(MenuAction("朗读") { onExpandedChange(false) })
