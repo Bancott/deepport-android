@@ -1,7 +1,8 @@
-package com.example.deepseekclone
+﻿package com.example.deepseekclone
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -49,6 +50,18 @@ private fun App() {
     var screen by remember { mutableStateOf(Screen.Chat) }
     var drawerOpen by remember { mutableStateOf(false) }
     var drawer by remember { mutableStateOf(DrawerUiState(groups = demoConversations())) }
+
+    // 返回栈：模型设置 → 设置 → 会话；抽屉打开时先关抽屉。只有主界面才真正退出。
+    BackHandler(enabled = screen != Screen.Chat) {
+        screen = when (screen) {
+            Screen.Model -> Screen.Settings
+            Screen.Settings -> Screen.Chat
+            else -> Screen.Chat
+        }
+    }
+    BackHandler(enabled = screen == Screen.Chat && drawerOpen) {
+        drawerOpen = false
+    }
 
     when (screen) {
         Screen.Model -> ModelSettingsScreen(
@@ -170,3 +183,4 @@ private fun demoConversations(): List<ConversationGroup> = listOf(
         ),
     ),
 )
+

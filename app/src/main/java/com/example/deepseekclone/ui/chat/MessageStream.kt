@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.ui.chat.markdown.MarkdownText
@@ -179,6 +180,7 @@ private fun AssistantMessage(
             }
             MessageActionBar(
                 message = message,
+                sessionTokens = sessionTokens,
                 onCopy = onCopy,
                 onSpeak = onSpeak,
                 onShare = onShare,
@@ -186,10 +188,6 @@ private fun AssistantMessage(
                 onBranchPrev = onBranchPrev,
                 onBranchNext = onBranchNext,
             )
-            TokenLine(message = message, sessionTokens = sessionTokens)
-        } else if (streaming) {
-            // 流式中也先给出"本轮预估"，避免底部空白
-            TokenLine(message = message, sessionTokens = sessionTokens, estimating = true)
         }
     }
 }
@@ -348,6 +346,7 @@ private fun SourcesPill(count: Int) {
 @Composable
 private fun MessageActionBar(
     message: MessageUi,
+    sessionTokens: Int,
     onCopy: () -> Unit,
     onSpeak: () -> Unit,
     onShare: () -> Unit,
@@ -436,6 +435,8 @@ private fun MessageActionBar(
 
         Spacer(Modifier.weight(1f))
 
+        TokenInline(message = message, sessionTokens = sessionTokens)
+
         ActionIcon(
             icon = { tint ->
                 Icon(
@@ -516,6 +517,33 @@ fun BottomFadeMask(modifier: Modifier = Modifier, height: Int = 28) {
                     listOf(Color.Transparent, colors.bg),
                 ),
             ),
+    )
+}
+
+
+
+/** token 用量直接排在动作条里（复制之后、朗读之前），字号与图标行匹配 */
+@Composable
+private fun TokenInline(message: MessageUi, sessionTokens: Int) {
+    val usage = message.usage ?: return
+    val colors = DsTheme.colors
+    val text = buildString {
+        append("↑")
+        append(formatTokens(usage.prompt))
+        append(" ↓")
+        append(formatTokens(usage.completion))
+        if (sessionTokens > 0) {
+            append(" · ")
+            append(formatTokens(sessionTokens))
+        }
+    }
+    Text(
+        text = text,
+        style = DsText.caption.copy(fontSize = 13.sp),
+        color = colors.textSecondary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(horizontal = 4.dp),
     )
 }
 

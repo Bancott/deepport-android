@@ -263,8 +263,27 @@ private fun ActionRow(
             onClick = onAttachClick,
         ) { PlusCircleGlyph(color = colors.textPrimary, iconSize = 25.dp) }
 
-        // 右侧只保留一个 40dp 圆形按钮：
-        // 空输入=麦克风 / 语音模式=键盘 / 有内容或生成中=发送或停止（与官方一致，不是并排三个）
+        // 麦克风/键盘常驻；发送或停止作为"第三个按钮"出现在它右边（官方同一行三个）
+        CircleIconButton(
+            contentDescription = if (state.mode == InputMode.Text) {
+                "切换到按住说话"
+            } else {
+                "切换到键盘输入"
+            },
+            onClick = onToggleMode,
+        ) {
+            if (state.mode == InputMode.Text) {
+                VoiceGlyph(color = colors.textPrimary, iconSize = 25.dp)
+            } else {
+                Icon(
+                    imageVector = Icons.Outlined.Keyboard,
+                    contentDescription = null,
+                    tint = colors.textPrimary,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+        }
+
         if (generating || state.canSend) {
             SendOrStopButton(
                 generating = generating,
@@ -272,26 +291,6 @@ private fun ActionRow(
                 onSend = onSend,
                 onStop = onStop,
             )
-        } else {
-            CircleIconButton(
-                contentDescription = if (state.mode == InputMode.Text) {
-                    "切换到按住说话"
-                } else {
-                    "切换到键盘输入"
-                },
-                onClick = onToggleMode,
-            ) {
-                if (state.mode == InputMode.Text) {
-                    VoiceGlyph(color = colors.textPrimary, iconSize = 25.dp)
-                } else {
-                    Icon(
-                        imageVector = Icons.Outlined.Keyboard,
-                        contentDescription = null,
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(26.dp),
-                    )
-                }
-            }
         }
     }
 }
@@ -327,6 +326,7 @@ private fun SendOrStopButton(
         }
     }
 }
+
 
 
 
