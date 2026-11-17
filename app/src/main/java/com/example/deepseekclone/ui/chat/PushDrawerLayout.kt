@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.deepseekclone.ui.theme.DsTheme
 import kotlinx.coroutines.launch
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
@@ -113,7 +114,13 @@ fun PushDrawerLayout(
                     .fillMaxSize()
                     .background(colors.pushedPage)
                     .graphicsLayer {
-                        translationX = drawerWidthPx * progress.value
+                        // 页面比抽屉"慢半拍"（p^1.7），同时轻微缩小、变淡 —— 形成前后的纵深感，
+                        // 不是单纯的水平平移。
+                        val pageP = progress.value.pow(1.7f)
+                        translationX = drawerWidthPx * pageP
+                        val s = 1f - 0.035f * pageP
+                        scaleX = s
+                        scaleY = s
                         if (progress.value > 0.01f) {
                             clip = true
                             shape = RoundedCornerShape(16.dp)
@@ -123,7 +130,10 @@ fun PushDrawerLayout(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer { alpha = 1f - 0.62f * progress.value },
+                        .graphicsLayer {
+                        val pageP = progress.value.pow(1.7f)
+                        alpha = 1f - 0.62f * pageP * pageP
+                    },
                 ) {
                     content()
                 }
@@ -153,5 +163,6 @@ fun PushDrawerLayout(
         }
     }
 }
+
 
 
