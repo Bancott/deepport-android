@@ -8,6 +8,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import android.app.Activity
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +52,18 @@ class MainActivity : ComponentActivity() {
                 "light" -> false
                 else -> isSystemInDarkTheme()
             }
+            // 主题切换时同步状态栏/导航栏图标明暗，否则浅色下仍是白图标、深色下仍是黑图标（看起来"乱"）
+            val view = LocalView.current
+            if (!view.isInEditMode) {
+                SideEffect {
+                    val window = (view.context as? Activity)?.window ?: return@SideEffect
+                    WindowCompat.getInsetsController(window, view).apply {
+                        isAppearanceLightStatusBars = !dark
+                        isAppearanceLightNavigationBars = !dark
+                    }
+                }
+            }
+
             DeepSeekTheme(darkTheme = dark) {
                 val density = LocalDensity.current
                 val scale = if (store.fontScale > 0f) store.fontScale else density.fontScale
@@ -249,6 +265,7 @@ private fun demoConversations(): List<ConversationGroup> = listOf(
         ),
     ),
 )
+
 
 
 

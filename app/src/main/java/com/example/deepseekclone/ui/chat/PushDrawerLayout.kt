@@ -167,6 +167,24 @@ fun PushDrawerLayout(
             ) {
                 drawer(Modifier.fillMaxSize())
 
+                // 卡片投在历史界面上的阴影：紧贴接缝最深(右)，向左淡出。
+                // 阴影必须画在卡片外侧，画到卡片里就成了"压进去"的效果。
+                if (pageLifted.value) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .width(20.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.12f * progress),
+                                    ),
+                                ),
+                            ),
+                    )
+                }
             }
 
             /* ---------- 2. 会话页（上层卡片） ---------- */
@@ -176,7 +194,7 @@ fun PushDrawerLayout(
                     .fillMaxSize()
                     .graphicsLayer {
                         val pageP = progress.pow(LAG_POWER)
-                        translationX = (drawerWidthPx - 10.dp.toPx()) * pageP
+                        translationX = (drawerWidthPx - 11.5.dp.toPx()) * pageP
                         val s = 1f - 0.052f * pageP
                         scaleX = s
                         scaleY = s
@@ -223,6 +241,9 @@ fun PushDrawerLayout(
         }
     }
 }
+
+
+
 
 
 
