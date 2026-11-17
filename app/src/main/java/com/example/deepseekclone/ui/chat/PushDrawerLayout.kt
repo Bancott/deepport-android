@@ -177,7 +177,7 @@ fun PushDrawerLayout(
                             .width(30.dp)
                             .background(
                                 Brush.horizontalGradient(
-                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.015f)),
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.04f)),
                                 ),
                             ),
                     )
@@ -238,6 +238,7 @@ fun PushDrawerLayout(
         }
     }
 }
+
 
 
 

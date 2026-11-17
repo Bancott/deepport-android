@@ -68,7 +68,7 @@ val DsLightColors = DsColors(
     warning = Color(0xFFE9A13B),
     switchOn = Color(0xFF5CC368),
     toast = Color(0xFF3C3C3E),
-    drawerSurface = Color(0xFFF8F8F8),
+    drawerSurface = Color(0xFFFFFFFF),
     pushedPage = Color(0xFFFFFFFF),
 )
 
@@ -97,6 +97,7 @@ val DsDarkColors = DsColors(
     drawerSurface = Color(0xFF0F0F0F),
     pushedPage = Color(0xFF1D1D1D),
 )
+
 
 
 
