@@ -95,7 +95,8 @@ fun PushDrawerLayout(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.bg),
+            // 卡片外侧露出的必须是历史界面的颜色，不能是第三种底色
+            .background(colors.drawerSurface),
     ) {
         val density = LocalDensity.current
         val drawerWidth = maxWidth * drawerWidthFraction
@@ -184,26 +185,19 @@ fun PushDrawerLayout(
             }
 
             /* ---------- 2. 会话页（上层卡片） ---------- */
+            // 不做投影：卡片外侧露出的就是历史界面本身，保证全屏只有两种颜色。
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
                         val pageP = progress.pow(LAG_POWER)
-                        // 让页面左缘正好压在抽屉右缘上（330dp），中间不留一条底色缝
                         translationX = (drawerWidthPx - 10.dp.toPx()) * pageP
                         val s = 1f - 0.052f * pageP
                         scaleX = s
                         scaleY = s
+                        clip = pageLifted.value
+                        if (pageLifted.value) shape = RoundedCornerShape(20.dp)
                     }
-                    .shadow(
-                        elevation = 8.dp,
-                        shape = RoundedCornerShape(20.dp),
-                        clip = false,
-                    )
-                    // 只在抽屉打开时裁圆角；关闭状态保持直角，避免四角露出底色
-                    .then(
-                        if (pageLifted.value) Modifier.clip(RoundedCornerShape(20.dp)) else Modifier,
-                    )
                     .background(colors.pushedPage),
             ) {
                 Box(
@@ -244,6 +238,10 @@ fun PushDrawerLayout(
         }
     }
 }
+
+
+
+
 
 
 
