@@ -97,11 +97,17 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 
 ## 5. 未实现（后续迭代）
 
-1. 智能搜索的**服务端**支持：请求体会带 `search: true`，只有网关真的支持联网才有结果；DeepSeek 官方接口会忽略 / 400（已做静默退回），来源明细也需要网关回传 `search_results` / `references`
-2. 数据层升级：Room（消息树）+ OkHttp SSE + Retrofit；当前是 JSON + SharedPreferences + HttpURLConnection
-3. 来源列表的真实站点图标（现在用域名首字母 + 散列配色做离线徽标）
-4. 语音识别的内置服务（现在要在设置里自己填 OpenAI 兼容的 /audio/transcriptions）
-5. 分享还没有做官方那种图片卡片；消息本体不能直接拖选（走「选择文本」弹窗）
+1. 朗读仍走系统 `TextToSpeech`；官方 `/v1/tools/tts`（24kHz 单声道裸 PCM，`voice_id=stella|tide`）已经接好调用与解析，待换成 AudioTrack 流式播放
+2. 设置里的「语音识别（可选）」三项已作废（ASR 现在走同一个 API Key，`/v1/tools/asr`），下次清理界面
+3. 分享还没有做官方那种图片卡片；消息本体不能直接拖选（走「选择文本」弹窗）
+4. 数据层仍是 JSON + SharedPreferences，待换 Room
+5. 来源列表的真实站点图标（现在用域名首字母 + 按域名散列配色）
+
+> 对话协议已换成官方 chat-demo 同款 Anthropic 兼容接口：
+> `POST {origin}/anthropic/v1/messages`，请求体带 `thinking:{type}`、`tools:[deepseek_web_search]`、
+> `safety_check`、`title`、`stream`；附件走 `/anthropic/v1/files`（`anthropic-beta: files-api-2025-04-14`），
+> ASR 走 `/v1/tools/asr`。事件名与 JSON `type` 一致，来源来自 `web_search_tool_result` 与 `citations_delta`。
+
 
 
 ## 6. 分支树 / 会话管理 / 附件 / 语音（本轮）
