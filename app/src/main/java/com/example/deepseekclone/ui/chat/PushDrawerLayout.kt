@@ -95,7 +95,7 @@ fun PushDrawerLayout(
                                 // 手指直接控制"露出的屏幕宽度比例"，再由它反推动画进度，
                                 // 这样拖拽距离和视觉上的分割位置是 1:1 的。
                                 val revealed = progress.value.pow(lagPower) +
-                                    dragAmount / screenWidthPx
+                                    dragAmount / (screenWidthPx * 0.5f)
                                 scope.launch {
                                     progress.snapTo(
                                         revealed.coerceIn(0f, 1f).pow(1f / lagPower),
@@ -180,4 +180,5 @@ fun PushDrawerLayout(
         }
     }
 }
+
 
