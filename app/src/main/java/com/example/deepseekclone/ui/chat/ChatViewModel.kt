@@ -5,7 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.deepseekclone.data.ChatMessage
 import com.example.deepseekclone.data.ChatRepository
+import com.example.deepseekclone.data.ConversationStore
 import com.example.deepseekclone.data.ChatStore
+import com.example.deepseekclone.data.StoredConversation
 import com.example.deepseekclone.data.SettingsStore
 import com.example.deepseekclone.data.StreamEvent
 import kotlinx.coroutines.Job
@@ -24,25 +26,77 @@ import java.util.UUID
 class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     private val settings = SettingsStore.get(app)
-    private val chatStore = ChatStore(app)
+    private val store = ConversationStore(app)
+    private var currentId: String = ""
     private val repository = ChatRepository()
 
     private val _state = MutableStateFlow(ChatUiState())
 
     init {
-        // 恢复上次会话（杀进程重进还能看到）
-        chatStore.load()?.let { (title, messages) ->
-            if (messages.isNotEmpty()) {
-                val total = messages.sumOf { it.usage?.total ?: 0 }
-                _state.value = ChatUiState(title = title, messages = messages, sessionTokens = total)
+        // 恢复最近一条会话；没有则准备一个新 id
+        // 一次性迁移：老版本把单会话存在 ChatStore（ds_chat.xml）里
+        if (store.loadAll().isEmpty()) {
+            ChatStore(app).load()?.let { (title, messages) ->
+                if (messages.isNotEmpty()) {
+                    store.upsert(
+                        StoredConversation(
+                            id = store.newId(),
+                            title = title.ifBlank { "新对话" },
+                            updatedAt = System.currentTimeMillis(),
+                            messages = messages,
+                        ),
+                    )
+                }
             }
         }
+        val latest = store.loadAll().firstOrNull()
+        if (latest != null) {
+            currentId = latest.id
+            val total = latest.messages.sumOf { it.usage?.total ?: 0 }
+            _state.value = ChatUiState(
+                title = latest.title,
+                messages = latest.messages,
+                sessionTokens = total,
+            )
+        } else {
+            currentId = store.newId()
+        }
+    }
+
+    /** 会话列表（抽屉用） */
+    fun conversations(): List<StoredConversation> = store.loadAll()
+
+    /** 打开历史会话 */
+    fun open(id: String) {
+        if (id == currentId) return
+        streamJob?.cancel()
+        val target = store.loadAll().firstOrNull { it.id == id } ?: return
+        currentId = id
+        val total = target.messages.sumOf { it.usage?.total ?: 0 }
+        _state.value = ChatUiState(
+            title = target.title,
+            messages = target.messages,
+            sessionTokens = total,
+        )
+    }
+
+    fun deleteConversation(id: String) {
+        store.delete(id)
+        if (id == currentId) newChat()
     }
 
     /** 消息列表变化后落盘（本地持久化） */
     private fun persist() {
         val s = _state.value
-        if (s.messages.isEmpty()) chatStore.clear() else chatStore.save(s.title, s.messages)
+        if (s.messages.isEmpty()) return
+        store.upsert(
+            StoredConversation(
+                id = currentId,
+                title = s.title.ifBlank { "新对话" },
+                updatedAt = System.currentTimeMillis(),
+                messages = s.messages,
+            ),
+        )
     }
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
@@ -75,8 +129,8 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleSpeechOutput() = _state.update { it.copy(isSpeechOutputOn = !it.isSpeechOutputOn) }
 
     fun newChat() {
-        chatStore.clear()
         streamJob?.cancel()
+        currentId = store.newId()
         _state.value = ChatUiState()
     }
 
@@ -263,6 +317,8 @@ private fun ChatUiState.updateMessage(
     id: String,
     block: (MessageUi) -> MessageUi,
 ): ChatUiState = copy(messages = messages.map { if (it.id == id) block(it) else it })
+
+
 
 
 

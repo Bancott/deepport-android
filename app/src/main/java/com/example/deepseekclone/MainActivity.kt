@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import android.app.Activity
 import androidx.compose.runtime.SideEffect
@@ -29,6 +30,7 @@ import com.example.deepseekclone.ui.chat.ConversationGroup
 import com.example.deepseekclone.ui.chat.ConversationUi
 import com.example.deepseekclone.ui.chat.DrawerUiState
 import com.example.deepseekclone.ui.chat.PushDrawerLayout
+import com.example.deepseekclone.ui.web.WebScreen
 import com.example.deepseekclone.ui.settings.AccountScreen
 import com.example.deepseekclone.ui.settings.AppearanceOptions
 import com.example.deepseekclone.ui.settings.FontSizeScreen
@@ -88,9 +90,10 @@ private fun App() {
 
     var screen by remember { mutableStateOf(Screen.Chat) }
     var drawerOpen by remember { mutableStateOf(false) }
-    var drawer by remember { mutableStateOf(DrawerUiState(groups = demoConversations())) }
+    var drawer by remember { mutableStateOf(DrawerUiState(groups = emptyList())) }
     var showAppearance by remember { mutableStateOf(false) }
     var showLanguage by remember { mutableStateOf(false) }
+    var webTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     // 返回栈：模型设置 → 设置 → 会话；抽屉打开时先关抽屉。只有主界面才真正退出。
     BackHandler(enabled = screen != Screen.Chat) {
@@ -126,6 +129,31 @@ private fun App() {
         )
     }
 
+    // 打开抽屉时用真实会话列表刷新一次
+    LaunchedEffect(drawerOpen) {
+        if (drawerOpen) {
+            val groups = vm.conversations()
+                .groupBy { it.groupLabel }
+                .map { (label, items) ->
+                    ConversationGroup(
+                        label = label,
+                        items = items.map { c -> ConversationUi(c.id, c.title.ifBlank { "新对话" }, label) },
+                    )
+                }
+            drawer = drawer.copy(groups = groups)
+        }
+    }
+
+    // WebView 页面（协议 / 帮助 / 官方充值）
+    webTarget?.let { (url, title) ->
+        WebScreen(
+            url = url,
+            title = title,
+            onBack = { webTarget = null },
+        )
+        return
+    }
+
     when (screen) {
         Screen.FontSize -> FontSizeScreen(
             current = store.fontScale,
@@ -156,6 +184,9 @@ private fun App() {
             onPersonalization = { screen = Screen.Personalization },
             onFontSize = { screen = Screen.FontSize },
             onLanguage = { showLanguage = true },
+            onAgreement = { webTarget = "https://cdn.deepseek.com/policies/zh-CN/deepseek-terms-of-use.html" to "服务协议" },
+            onHelp = { webTarget = "https://chat.deepseek.com/" to "帮助与反馈" },
+            onRecharge = { webTarget = "https://platform.deepseek.com/top_up" to "DeepSeek 官方充值" },
             onAppearance = { showAppearance = true },
         )
 
@@ -167,7 +198,10 @@ private fun App() {
                     state = drawer,
                     modifier = modifier,
                     onSearchClick = { },
-                    onConversationClick = { drawerOpen = false },
+                    onConversationClick = { conversation ->
+                        vm.open(conversation.id)
+                        drawerOpen = false
+                    },
                     onLongPress = { conversation ->
                         drawer = drawer.copy(
                             groups = drawer.groups.map { group ->
@@ -265,6 +299,8 @@ private fun demoConversations(): List<ConversationGroup> = listOf(
         ),
     ),
 )
+
+
 
 
 
