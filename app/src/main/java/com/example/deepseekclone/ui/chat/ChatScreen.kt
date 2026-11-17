@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
@@ -16,8 +16,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.ime
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
@@ -26,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -62,7 +62,16 @@ fun ChatScreen(
     onStop: () -> Unit = {},
 ) {
     val colors = DsTheme.colors
-    val imeVisible = WindowInsets.isImeVisible
+    // 键盘弹起时：免责声明保持占位（避免收起时整页回跳），
+    // 由输入栏自己把这 27dp 抵掉，保证栏底始终贴着键盘上沿 + 8dp。
+    val density = LocalDensity.current
+    val imeBottomPx = WindowInsets.ime.getBottom(density)
+    val disclaimerBlockPx = with(density) { DisclaimerBlockHeight.toPx() }
+    val inputBottomPadding = with(density) {
+        val extra = (imeBottomPx - disclaimerBlockPx).coerceAtLeast(0f)
+        val gap = if (imeBottomPx > 0) 8.dp.toPx() else 0f
+        (extra + gap).toDp()
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -106,9 +115,7 @@ fun ChatScreen(
         }
 
         DsInputBar(
-            modifier = Modifier
-                .imePadding()
-                .padding(bottom = if (imeVisible) 8.dp else 0.dp),
+            modifier = Modifier.padding(bottom = inputBottomPadding),
             state = state.input,
             generating = state.isGenerating,
             onTextChange = onTextChange,
@@ -121,17 +128,15 @@ fun ChatScreen(
             onStop = onStop,
         )
 
-        // 键盘弹起时免责声明整行移除（不占位），保证输入栏紧贴键盘；收起后恢复
-        if (!imeVisible) {
-            Text(
-                text = "回答由 AI 生成，仅供参考",
-                style = DsText.meta.copy(fontSize = 12.sp),
-                color = colors.textTertiary,
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 3.dp, bottom = 10.dp),
-            )
-        }
+        // 始终渲染（高度固定），键盘弹起时被键盘遮住即可；不再增删节点，避免整页回跳
+        Text(
+            text = "回答由 AI 生成，仅供参考",
+            style = DsText.meta.copy(fontSize = 12.sp),
+            color = colors.textTertiary,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(top = DisclaimerBlockTopPadding, bottom = DisclaimerBlockBottomPadding),
+        )
     }
 }
 
@@ -224,4 +229,11 @@ private fun ChatVoiceLightPreview() {
 
 
 
+
+
+
+/** 免责声明区块尺寸（文字行高 14 + 上 3 + 下 10），键盘弹起时由输入栏抵消 */
+private val DisclaimerBlockTopPadding = 3.dp
+private val DisclaimerBlockBottomPadding = 10.dp
+private val DisclaimerBlockHeight = 27.dp
 
