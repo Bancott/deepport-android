@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -244,6 +244,15 @@ private fun ConversationList(
                         .padding(horizontal = 22.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (conversation.pinned) {
+                        Icon(
+                            imageVector = Icons.Outlined.PushPin,
+                            contentDescription = "已置顶",
+                            tint = colors.textTertiary,
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                    }
                     Text(
                         text = conversation.title,
                         style = DsText.label,
@@ -265,7 +274,7 @@ private fun ConversationList(
                             menuTarget = null
                             onRename(target)
                         }
-                        ConversationMenuItem("置顶") {
+                        ConversationMenuItem(if (target.pinned) "取消置顶" else "置顶") {
                             menuTarget = null
                             onPin(target)
                         }

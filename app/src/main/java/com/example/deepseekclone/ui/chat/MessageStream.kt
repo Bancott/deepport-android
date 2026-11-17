@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import com.example.deepseekclone.R
 
@@ -463,8 +463,12 @@ private fun MessageActionBar(
             onClick = onShare,
         )
 
-        // token 紧跟分享，与图标同一节奏，组成一组
-        TokenInline(message = message, sessionTokens = sessionTokens)
+        // token 紧跟分享，与图标同一节奏，组成一组；有分支切换器时用紧凑写法（否则挤到省略号）
+        TokenInline(
+            message = message,
+            sessionTokens = sessionTokens,
+            compact = message.branchCount > 1,
+        )
 
         Spacer(Modifier.weight(1f))
 
@@ -551,7 +555,7 @@ fun BottomFadeMask(modifier: Modifier = Modifier, height: Int = 28) {
 
 /** token 用量直接排在动作条里（复制之后、朗读之前），字号与图标行匹配 */
 @Composable
-private fun TokenInline(message: MessageUi, sessionTokens: Int) {
+private fun TokenInline(message: MessageUi, sessionTokens: Int, compact: Boolean = false) {
     val usage = message.usage ?: return
     val colors = DsTheme.colors
     val text = buildString {
@@ -559,7 +563,7 @@ private fun TokenInline(message: MessageUi, sessionTokens: Int) {
         append(formatTokens(usage.prompt))
         append(" ↓")
         append(formatTokens(usage.completion))
-        if (sessionTokens > 0) {
+        if (!compact && sessionTokens > 0) {
             append(" tok · ")
             append(formatTokens(sessionTokens))
         }

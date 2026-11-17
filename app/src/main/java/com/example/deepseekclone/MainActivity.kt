@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone
+package com.example.deepseekclone
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -25,11 +25,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.deepseekclone.data.SettingsStore
 import com.example.deepseekclone.ui.chat.ChatScreen
 import com.example.deepseekclone.ui.chat.ChatViewModel
+import com.example.deepseekclone.ui.chat.ConfirmDialog
 import com.example.deepseekclone.ui.chat.ConversationDrawer
-import com.example.deepseekclone.ui.chat.ConversationGroup
 import com.example.deepseekclone.ui.chat.ConversationUi
 import com.example.deepseekclone.ui.chat.DrawerUiState
 import com.example.deepseekclone.ui.chat.PushDrawerLayout
+import com.example.deepseekclone.ui.chat.RenameConversationDialog
+import com.example.deepseekclone.ui.chat.SearchScreen
 import com.example.deepseekclone.ui.web.WebScreen
 import com.example.deepseekclone.ui.settings.AccountScreen
 import com.example.deepseekclone.ui.settings.AppearanceOptions
@@ -79,7 +81,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Chat, Settings, Model, Account, Data, Personalization, FontSize }
+private enum class Screen { Chat, Search, Settings, Model, Account, Data, Personalization, FontSize }
 
 @Composable
 private fun App() {
@@ -90,10 +92,17 @@ private fun App() {
 
     var screen by remember { mutableStateOf(Screen.Chat) }
     var drawerOpen by remember { mutableStateOf(false) }
-    var drawer by remember { mutableStateOf(DrawerUiState(groups = emptyList())) }
+    var drawer by remember { mutableStateOf(DrawerUiState()) }
+    var renameTarget by remember { mutableStateOf<ConversationUi?>(null) }
+    var deleteTarget by remember { mutableStateOf<ConversationUi?>(null) }
     var showAppearance by remember { mutableStateOf(false) }
     var showLanguage by remember { mutableStateOf(false) }
     var webTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    // 重命名 / 置顶 / 删除之后都要从存储里重算分组，否则抽屉还显示旧标题
+    fun refreshDrawer() {
+        drawer = drawer.copy(groups = vm.conversationGroups())
+    }
 
     // 返回栈：模型设置 → 设置 → 会话；抽屉打开时先关抽屉。只有主界面才真正退出。
     BackHandler(enabled = screen != Screen.Chat) {
@@ -129,19 +138,32 @@ private fun App() {
         )
     }
 
+    renameTarget?.let { target ->
+        RenameConversationDialog(
+            initial = target.title,
+            onConfirm = { newTitle ->
+                vm.renameConversation(target.id, newTitle)
+                refreshDrawer()
+            },
+            onDismiss = { renameTarget = null },
+        )
+    }
+
+    deleteTarget?.let { target ->
+        ConfirmDialog(
+            title = "删除对话",
+            message = "「${target.title}」删除后不可恢复。",
+            onConfirm = {
+                vm.deleteConversation(target.id)
+                refreshDrawer()
+            },
+            onDismiss = { deleteTarget = null },
+        )
+    }
+
     // 打开抽屉时用真实会话列表刷新一次
     LaunchedEffect(drawerOpen) {
-        if (drawerOpen) {
-            val groups = vm.conversations()
-                .groupBy { it.groupLabel }
-                .map { (label, items) ->
-                    ConversationGroup(
-                        label = label,
-                        items = items.map { c -> ConversationUi(c.id, c.title.ifBlank { "新对话" }, label) },
-                    )
-                }
-            drawer = drawer.copy(groups = groups)
-        }
+        if (drawerOpen) refreshDrawer()
     }
 
     // WebView 页面（协议 / 帮助 / 官方充值）
@@ -155,6 +177,15 @@ private fun App() {
     }
 
     when (screen) {
+        Screen.Search -> SearchScreen(
+            onBack = { screen = Screen.Chat },
+            onOpenConversation = { id ->
+                vm.open(id)
+                screen = Screen.Chat
+            },
+            search = { vm.search(it) },
+        )
+
         Screen.FontSize -> FontSizeScreen(
             current = store.fontScale,
             onBack = { screen = Screen.Settings },
@@ -197,22 +228,19 @@ private fun App() {
                 ConversationDrawer(
                     state = drawer,
                     modifier = modifier,
-                    onSearchClick = { },
+                    onSearchClick = {
+                        drawerOpen = false
+                        screen = Screen.Search
+                    },
                     onConversationClick = { conversation ->
                         vm.open(conversation.id)
                         drawerOpen = false
                     },
-                    onLongPress = { },
+                    onLongPress = { conversation -> deleteTarget = conversation },
+                    onRename = { conversation -> renameTarget = conversation },
                     onPin = { conversation ->
-                        drawer = drawer.copy(
-                            groups = drawer.groups.map { group ->
-                                group.copy(
-                                    items = group.items.map {
-                                        if (it.id == conversation.id) it.copy(pinned = !it.pinned) else it
-                                    },
-                                )
-                            },
-                        )
+                        vm.togglePin(conversation.id)
+                        refreshDrawer()
                     },
                     onToggleMultiSelect = { drawer = drawer.copy(multiSelect = true) },
                     onToggleSelect = { conversation ->
@@ -228,18 +256,14 @@ private fun App() {
                         drawer = drawer.copy(multiSelect = false, selectedIds = emptySet())
                     },
                     onPinSelected = {
+                        vm.setPinned(drawer.selectedIds, true)
                         drawer = drawer.copy(multiSelect = false, selectedIds = emptySet())
+                        refreshDrawer()
                     },
                     onDeleteSelected = {
-                        drawer.selectedIds.forEach { vm.deleteConversation(it) }
-                        val ids = drawer.selectedIds
-                        drawer = drawer.copy(
-                            multiSelect = false,
-                            selectedIds = emptySet(),
-                            groups = drawer.groups.map { group ->
-                                group.copy(items = group.items.filterNot { it.id in ids })
-                            },
-                        )
+                        vm.deleteConversations(drawer.selectedIds)
+                        drawer = drawer.copy(multiSelect = false, selectedIds = emptySet())
+                        refreshDrawer()
                     },
                     onFooterClick = {
                         drawerOpen = false
@@ -262,38 +286,15 @@ private fun App() {
                 onStop = { vm.stop() },
                 onToggleReasoning = { vm.toggleReasoning(it.id) },
                 onRegenerate = { vm.regenerate(it) },
+                onRetryMessage = { vm.retry(it) },
+                onBranchPrev = { vm.selectBranch(it, -1) },
+                onBranchNext = { vm.selectBranch(it, 1) },
             )
         }
     }
 }
 
-/* ------------------------------- Demo 数据 ------------------------------- */
 
-private fun demoConversations(): List<ConversationGroup> = listOf(
-    ConversationGroup(
-        label = "今天",
-        items = listOf(
-            ConversationUi("c1", "复刻 DeepSeek 安卓架构", "今天"),
-            ConversationUi("c2", "其他模型 API 配置方法", "今天"),
-            ConversationUi("c3", "Bancott 用户名评价", "今天"),
-            ConversationUi("c4", "MFC 含义解析", "今天"),
-            ConversationUi("c5", "二进制解码排序解释", "今天"),
-            ConversationUi("c6", "王者英雄语音查看", "今天"),
-        ),
-    ),
-    ConversationGroup(
-        label = "昨天",
-        items = listOf(
-            ConversationUi("c7", "GitHub 新功能解析", "昨天"),
-            ConversationUi("c8", "罗荣铸生日尺牍范文", "昨天"),
-            ConversationUi("c9", "Bancott 含义解析", "昨天"),
-            ConversationUi("c10", "Zotero 导出参考文献", "昨天"),
-            ConversationUi("c11", "百度地图 BD09 坐标系", "昨天"),
-            ConversationUi("c12", "香农熵解释", "昨天"),
-            ConversationUi("c13", "组会汇报急救指南", "昨天"),
-        ),
-    ),
-)
 
 
 
