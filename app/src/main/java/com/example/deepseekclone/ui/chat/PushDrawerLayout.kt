@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -101,6 +102,7 @@ fun PushDrawerLayout(
         val density = LocalDensity.current
         val drawerWidth = maxWidth * drawerWidthFraction
         val drawerWidthPx = with(density) { drawerWidth.toPx() }
+        val cameraDistancePx = with(density) { 14.dp.toPx() }
         val screenWidthPx = with(density) { maxWidth.toPx() }
         val dragSpanPx = screenWidthPx * DRAG_SPAN_RATIO
 
@@ -194,12 +196,17 @@ fun PushDrawerLayout(
                     .fillMaxSize()
                     .graphicsLayer {
                         val pageP = progress.pow(LAG_POWER)
+                        // 屏幕本身就是圆角矩形：卡片用同样的 R 角（约 32dp）整体凸显出来
                         translationX = (drawerWidthPx - 11.5.dp.toPx()) * pageP
-                        val s = 1f - 0.052f * pageP
+                        val s = 1f - 0.06f * pageP
                         scaleX = s
                         scaleY = s
+                        // 向右滑动的同时整体后退 + 左侧向后倾斜（以右缘为轴做 Y 轴旋转）
+                        transformOrigin = TransformOrigin(1f, 0.5f)
+                        rotationY = -8f * pageP
+                        cameraDistance = cameraDistancePx
                         clip = pageLifted.value
-                        if (pageLifted.value) shape = RoundedCornerShape(20.dp)
+                        if (pageLifted.value) shape = RoundedCornerShape(32.dp)
                     }
                     .background(colors.pushedPage),
             ) {
@@ -241,6 +248,10 @@ fun PushDrawerLayout(
         }
     }
 }
+
+
+
+
 
 
 

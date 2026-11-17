@@ -64,7 +64,8 @@ fun SingleChoiceDialog(
     icon: ImageVector? = null,
 ) {
     val colors = DsTheme.colors
-    var draft by remember { mutableStateOf(selected) }
+    // 用 selected 作为 key：外部主题变化后重新打开弹窗时能正确回显当前值
+    var draft by remember(selected) { mutableStateOf(selected) }
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -161,7 +162,7 @@ private fun RadioDot(selected: Boolean) {
                 Modifier
                     .size(12.dp)
                     .clip(CircleShape)
-                    .background(Color.White),
+                    .background(colors.textPrimary),
             )
         }
     }
@@ -176,4 +177,6 @@ private fun Divider() {
             .background(DsTheme.colors.outline),
     )
 }
+
+
 
