@@ -110,8 +110,59 @@ class ChatRepository {
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun describeHttpError(code: Int, body: String): String {
-        val detail = runCatching {
+    /**
+     * 语音转写（OpenAI 兼容的 /audio/transcriptions 表单上传）。
+     * 供应商不统一，所以 baseUrl / key / model 都由设置里单独填。
+     */
+    fun transcribe(
+        baseUrl: String,
+        apiKey: String,
+        model: String,
+        audio: java.io.File,
+    ): String {
+        val url = baseUrl.trimEnd('/') + "/audio/transcriptions"
+        val boundary = "----DSClone" + System.currentTimeMillis()
+        val fileName = audio.name.ifBlank { "voice.m4a" }
+        val head = buildString {
+            append("--").append(boundary).append("\r\n")
+            append("Content-Disposition: form-data; name=\"model\"\r\n\r\n")
+            append(model).append("\r\n")
+            append("--").append(boundary).append("\r\n")
+            append("Content-Disposition: form-data; name=\"file\"; filename=\"")
+            append(fileName).append("\"\r\n")
+            append("Content-Type: audio/mp4\r\n\r\n")
+        }.toByteArray()
+        val tail = "\r\n--$boundary--\r\n".toByteArray()
+
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            connectTimeout = 20_000
+            readTimeout = 90_000
+            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            if (apiKey.isNotBlank()) setRequestProperty("Authorization", "Bearer $apiKey")
+        }
+        try {
+            conn.setFixedLengthStreamingMode(head.size + audio.length() + tail.size)
+            conn.outputStream.use { out ->
+                out.write(head)
+                audio.inputStream().use { it.copyTo(out) }
+                out.write(tail)
+            }
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                val err = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                throw IllegalStateException(describeHttpError(code, err))
+            }
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            val text = runCatching { JSONObject(body).optString("text") }.getOrDefault("")
+            return text.ifBlank { body.trim().removeSurrounding("\"") }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    private fun describeHttpError(code: Int, body: String): String {        val detail = runCatching {
             JSONObject(body).optJSONObject("error")?.optString("message").orEmpty()
         }.getOrDefault("")
         val base = when (code) {

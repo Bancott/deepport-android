@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.data
+package com.example.deepseekclone.data
 
 import android.content.Context
 import androidx.compose.runtime.getValue
@@ -35,9 +35,39 @@ class SettingsStore private constructor(context: Context) {
     )
         private set
 
+    /* ------------------------- 语音识别（可选，按住说话） ------------------------- */
+
+    /** OpenAI 兼容的 /audio/transcriptions 地址，如 https://api.openai.com/v1 */
+    var asrBaseUrl by mutableStateOf(prefs.getString(KEY_ASR_BASE, "").orEmpty())
+        private set
+
+    /** 留空则复用上面的 API Key */
+    var asrApiKey by mutableStateOf(prefs.getString(KEY_ASR_KEY, "").orEmpty())
+        private set
+
+    var asrModel by mutableStateOf(
+        prefs.getString(KEY_ASR_MODEL, DEFAULT_ASR_MODEL).orEmpty(),
+    )
+        private set
+
     fun updateApiKey(value: String) {
         apiKey = value
         persist()
+    }
+
+    fun updateAsrBaseUrl(value: String) {
+        asrBaseUrl = value.trim()
+        prefs.edit().putString(KEY_ASR_BASE, value.trim()).apply()
+    }
+
+    fun updateAsrApiKey(value: String) {
+        asrApiKey = value.trim()
+        prefs.edit().putString(KEY_ASR_KEY, value.trim()).apply()
+    }
+
+    fun updateAsrModel(value: String) {
+        asrModel = value.trim()
+        prefs.edit().putString(KEY_ASR_MODEL, value.trim()).apply()
     }
 
     fun updateBaseUrl(value: String) {
@@ -79,6 +109,8 @@ class SettingsStore private constructor(context: Context) {
         const val DEFAULT_BASE = "https://api.deepseek.com"
         /** 模型 id 由 GET /models 决定，本地不写死 */
         const val DEFAULT_MODEL = ""
+        /** 语音识别默认模型名（多数 OpenAI 兼容网关都用这个） */
+        const val DEFAULT_ASR_MODEL = "whisper-1"
         val MODELS = listOf(
             "deepseek-chat" to "通用对话（V3）",
             "deepseek-reasoner" to "深度思考（R1）",
@@ -89,6 +121,9 @@ class SettingsStore private constructor(context: Context) {
         private const val KEY_MODEL = "model"
         private const val KEY_THEME = "theme_mode"
         private const val KEY_FONT = "font_scale"
+        private const val KEY_ASR_BASE = "asr_base_url"
+        private const val KEY_ASR_KEY = "asr_api_key"
+        private const val KEY_ASR_MODEL = "asr_model"
     }
 }
 

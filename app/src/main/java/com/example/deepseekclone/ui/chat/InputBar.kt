@@ -5,6 +5,8 @@ import com.example.deepseekclone.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -67,9 +71,12 @@ fun DsInputBar(
     onToggleDeepThinking: () -> Unit = {},
     onToggleSmartSearch: () -> Unit = {},
     onAttachClick: () -> Unit = {},
+    onRemoveAttachment: (AttachmentUi) -> Unit = {},
     onToggleMode: () -> Unit = {},
     onDismissTranscribedNotice: () -> Unit = {},
-    onHoldToTalk: () -> Unit = {},
+    onVoiceStart: () -> Unit = {},
+    onVoiceCancelChange: (Boolean) -> Unit = {},
+    onVoiceEnd: (Boolean) -> Unit = {},
     onSend: () -> Unit = {},
     onStop: () -> Unit = {},
 ) {
@@ -92,6 +99,13 @@ fun DsInputBar(
                 bottom = 10.dp,
             ),
         ) {
+            if (state.attachments.isNotEmpty()) {
+                PendingAttachmentRow(
+                    items = state.attachments,
+                    onRemove = onRemoveAttachment,
+                )
+            }
+
             state.transcribedNotice?.let { notice ->
                 TranscribedNotice(
                     text = notice,
@@ -102,7 +116,11 @@ fun DsInputBar(
 
             when {
                 state.transcribing -> TranscribingRow()
-                state.mode == InputMode.Voice -> HoldToTalkRow(onHoldToTalk = onHoldToTalk)
+                state.mode == InputMode.Voice -> HoldToTalkRow(
+                    onStart = onVoiceStart,
+                    onCancelChange = onVoiceCancelChange,
+                    onEnd = onVoiceEnd,
+                )
                 else -> InputTextField(
                     text = state.text,
                     onTextChange = onTextChange,
@@ -156,9 +174,18 @@ private fun InputTextField(
     )
 }
 
+/**
+ * 「按住说话」：按下即开录，手指上滑超过 56dp 进入取消态，松手回调是否取消。
+ * 用 awaitEachGesture 手写，避免 detectDragGestures 的长按延迟（官方是按下就录）。
+ */
 @Composable
-private fun HoldToTalkRow(onHoldToTalk: () -> Unit) {
+private fun HoldToTalkRow(
+    onStart: () -> Unit,
+    onCancelChange: (Boolean) -> Unit,
+    onEnd: (Boolean) -> Unit,
+) {
     val colors = DsTheme.colors
+    val cancelThreshold = with(LocalDensity.current) { 56.dp.toPx() }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -173,7 +200,25 @@ private fun HoldToTalkRow(onHoldToTalk: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
-                .clickable(onClick = onHoldToTalk)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        onStart()
+                        var cancel = false
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            val dragging = change.position.y - down.position.y < -cancelThreshold
+                            if (dragging != cancel) {
+                                cancel = dragging
+                                onCancelChange(cancel)
+                            }
+                            change.consume()
+                        }
+                        onEnd(cancel)
+                    }
+                }
                 .padding(vertical = 4.dp),
         )
     }

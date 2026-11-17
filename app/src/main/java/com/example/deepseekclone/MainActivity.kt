@@ -3,8 +3,11 @@ package com.example.deepseekclone
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,13 +19,16 @@ import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.deepseekclone.data.AttachmentStore
 import com.example.deepseekclone.data.SettingsStore
+import com.example.deepseekclone.ui.camera.CameraScreen
 import com.example.deepseekclone.ui.chat.ChatScreen
 import com.example.deepseekclone.ui.chat.ChatViewModel
 import com.example.deepseekclone.ui.chat.ConfirmDialog
@@ -32,6 +38,7 @@ import com.example.deepseekclone.ui.chat.DrawerUiState
 import com.example.deepseekclone.ui.chat.PushDrawerLayout
 import com.example.deepseekclone.ui.chat.RenameConversationDialog
 import com.example.deepseekclone.ui.chat.SearchScreen
+import com.example.deepseekclone.ui.chat.rememberVoiceInput
 import com.example.deepseekclone.ui.web.WebScreen
 import com.example.deepseekclone.ui.settings.AccountScreen
 import com.example.deepseekclone.ui.settings.AppearanceOptions
@@ -43,6 +50,12 @@ import com.example.deepseekclone.ui.settings.ModelSettingsScreen
 import com.example.deepseekclone.ui.settings.PersonalizationScreen
 import com.example.deepseekclone.ui.settings.SettingsScreen
 import com.example.deepseekclone.ui.theme.DeepSeekTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -98,6 +111,31 @@ private fun App() {
     var showAppearance by remember { mutableStateOf(false) }
     var showLanguage by remember { mutableStateOf(false) }
     var webTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var showCamera by remember { mutableStateOf(false) }
+
+    val attachmentStore = remember { AttachmentStore(context) }
+    val scope = rememberCoroutineScope()
+
+    // 相册 / 文件都先把内容复制进私有目录，再作为待发送附件挂到输入卡
+    fun importAttachment(uri: android.net.Uri) {
+        scope.launch {
+            val item = withContext(Dispatchers.IO) { attachmentStore.importUri(uri) }
+            item?.let { vm.addAttachments(listOf(it)) }
+        }
+    }
+
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> uri?.let { importAttachment(it) } }
+    val pickFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { importAttachment(it) } }
+
+    // 按住说话：录音 → 转写 → 回填输入框
+    val voice = rememberVoiceInput(
+        onRecorded = { file -> vm.transcribeAudio(file) },
+        onDenied = { vm.failTranscription("需要麦克风权限才能使用语音输入") },
+    )
 
     // 重命名 / 置顶 / 删除之后都要从存储里重算分组，否则抽屉还显示旧标题
     fun refreshDrawer() {
@@ -172,6 +210,22 @@ private fun App() {
             url = url,
             title = title,
             onBack = { webTarget = null },
+        )
+        return
+    }
+
+    // 应用内相机：拍完把临时文件导入附件，回到会话页
+    if (showCamera) {
+        CameraScreen(
+            onClose = { showCamera = false },
+            onCaptured = { file ->
+                showCamera = false
+                scope.launch {
+                    val name = "IMG_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.CHINA).format(Date())}.jpg"
+                    val item = withContext(Dispatchers.IO) { attachmentStore.importFile(file, name) }
+                    item?.let { vm.addAttachments(listOf(it)) }
+                }
+            },
         )
         return
     }
@@ -282,6 +336,20 @@ private fun App() {
                 onToggleSmartSearch = { vm.toggleSmartSearch() },
                 onToggleInputMode = { vm.toggleInputMode() },
                 onDismissTranscribedNotice = { vm.dismissTranscribedNotice() },
+                onRemoveAttachment = { vm.removeAttachment(it.id) },
+                onPickCamera = { showCamera = true },
+                onPickGallery = {
+                    pickImage.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                onPickFile = { pickFile.launch(arrayOf("*/*")) },
+                voiceRecording = voice.recording,
+                voiceCancel = voice.cancelHint,
+                voiceLevels = voice.levels,
+                onVoiceStart = { voice.start() },
+                onVoiceCancelChange = { voice.updateCancel(it) },
+                onVoiceEnd = { cancel -> voice.finish(cancel) },
                 onSend = { vm.send() },
                 onStop = { vm.stop() },
                 onToggleReasoning = { vm.toggleReasoning(it.id) },

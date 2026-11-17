@@ -10,12 +10,14 @@ import com.example.deepseekclone.data.ConversationStore
 import com.example.deepseekclone.data.SettingsStore
 import com.example.deepseekclone.data.StreamEvent
 import com.example.deepseekclone.data.StoredConversation
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 
@@ -288,6 +290,42 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     fun failTranscription(hint: String) {
         _state.update {
             it.copy(input = it.input.copy(transcribing = false, transcribedNotice = hint))
+        }
+    }
+
+    /**
+     * 录音转写：走 OpenAI 兼容的 /audio/transcriptions（设置里单独配，未配置就明确提示）。
+     * 成功把文字回填到输入框，失败给出可读原因。
+     */
+    fun transcribeAudio(file: java.io.File) {
+        if (_state.value.input.transcribing) {
+            file.delete()
+            return
+        }
+        val baseUrl = settings.asrBaseUrl
+        val model = settings.asrModel
+        if (baseUrl.isBlank() || model.isBlank()) {
+            file.delete()
+            failTranscription("未配置语音识别服务：设置 → 模型设置 → 语音识别")
+            return
+        }
+        val key = settings.asrApiKey.ifBlank { settings.apiKey }
+        setTranscribing(true)
+        viewModelScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.IO) { repository.transcribe(baseUrl, key, model, file) }
+            }
+            runCatching { file.delete() }
+            result
+                .onSuccess { text ->
+                    val clean = text.trim()
+                    if (clean.isBlank()) {
+                        failTranscription("没有识别到语音内容，请重试")
+                    } else {
+                        applyTranscription(clean)
+                    }
+                }
+                .onFailure { failTranscription(it.message ?: "语音识别失败，请检查服务配置") }
         }
     }
 

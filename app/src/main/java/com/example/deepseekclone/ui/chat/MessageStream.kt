@@ -141,16 +141,23 @@ private fun UserMessage(message: MessageUi) {
             expanded = menuExpanded.value,
             onExpandedChange = { menuExpanded.value = it },
         ) {
-            Surface(
-                color = colors.bubble,
-                shape = RoundedCornerShape(20.dp),
-            ) {
-                Text(
-                    text = message.text,
-                    style = DsText.bodyTight,
-                    color = colors.textPrimary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                )
+            Column(horizontalAlignment = Alignment.End) {
+                if (message.attachments.isNotEmpty()) {
+                    MessageAttachments(message.attachments)
+                }
+                if (message.text.isNotBlank()) {
+                    Surface(
+                        color = colors.bubble,
+                        shape = RoundedCornerShape(20.dp),
+                    ) {
+                        Text(
+                            text = message.text,
+                            style = DsText.bodyTight,
+                            color = colors.textPrimary,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        )
+                    }
+                }
             }
         }
     }

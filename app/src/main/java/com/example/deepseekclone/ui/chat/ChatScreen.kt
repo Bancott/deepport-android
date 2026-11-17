@@ -1,8 +1,13 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import androidx.compose.ui.draw.rotate
 
 import android.content.res.Configuration
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,8 +30,14 @@ import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -57,11 +68,20 @@ fun ChatScreen(
     onTextChange: (String) -> Unit = {},
     onToggleDeepThinking: () -> Unit = {},
     onToggleSmartSearch: () -> Unit = {},
-    onAttachClick: () -> Unit = {},
     onToggleInputMode: () -> Unit = {},
     onDismissTranscribedNotice: () -> Unit = {},
+    onRemoveAttachment: (AttachmentUi) -> Unit = {},
+    onPickCamera: () -> Unit = {},
+    onPickGallery: () -> Unit = {},
+    onPickFile: () -> Unit = {},
     onSend: () -> Unit = {},
     onStop: () -> Unit = {},
+    voiceRecording: Boolean = false,
+    voiceCancel: Boolean = false,
+    voiceLevels: List<Float> = emptyList(),
+    onVoiceStart: () -> Unit = {},
+    onVoiceCancelChange: (Boolean) -> Unit = {},
+    onVoiceEnd: (Boolean) -> Unit = {},
     onToggleReasoning: (MessageUi) -> Unit = {},
     onCopyMessage: (MessageUi) -> Unit = {},
     onSpeakMessage: (MessageUi) -> Unit = {},
@@ -82,92 +102,136 @@ fun ChatScreen(
         val gap = if (imeBottomPx > 0) 8.dp.toPx() else 0f
         (extra + gap).toDp()
     }
-    Column(
+    // 附件面板：点「+」展开，键盘弹起 / 发出消息后自动收起
+    var attachOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(imeBottomPx) { if (imeBottomPx > 0) attachOpen = false }
+    LaunchedEffect(state.messages.size) { attachOpen = false }
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.bg)
-            .statusBarsPadding(),
+            .background(colors.bg),
     ) {
-        DeepSeekTopBar(
-            title = state.title,
-            onMenuClick = onMenuClick,
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),
         ) {
-            CircleIconButton(
-                contentDescription = if (state.isSpeechOutputOn) "关闭朗读" else "开启朗读",
-                onClick = onToggleSpeechOutput,
+            DeepSeekTopBar(
+                title = state.title,
+                onMenuClick = onMenuClick,
             ) {
-                // 顶栏用用户提供的「声音」SVG；关闭朗读时叠一条斜线
-                Box(contentAlignment = Alignment.Center) {
-                    SvgIcon(R.drawable.ic_action_volume, tint = colors.textPrimary, size = 22.dp)
-                    if (!state.isSpeechOutputOn) {
-                        Box(
-                            Modifier
-                                .size(width = 26.dp, height = 1.8.dp)
-                                .rotate(-45f)
-                                .background(colors.textPrimary),
-                        )
+                CircleIconButton(
+                    contentDescription = if (state.isSpeechOutputOn) "关闭朗读" else "开启朗读",
+                    onClick = onToggleSpeechOutput,
+                ) {
+                    // 顶栏用用户提供的「声音」SVG；关闭朗读时叠一条斜线
+                    Box(contentAlignment = Alignment.Center) {
+                        SvgIcon(R.drawable.ic_action_volume, tint = colors.textPrimary, size = 22.dp)
+                        if (!state.isSpeechOutputOn) {
+                            Box(
+                                Modifier
+                                    .size(width = 26.dp, height = 1.8.dp)
+                                    .rotate(-45f)
+                                    .background(colors.textPrimary),
+                            )
+                        }
                     }
                 }
+                Spacer(Modifier.width(8.dp))
+                CircleIconButton(
+                    contentDescription = "新建对话",
+                    onClick = onNewChatClick,
+                ) {
+                    SvgIcon(R.drawable.ic_action_new_chat, tint = colors.textPrimary, size = 19.dp)
+                }
             }
-            Spacer(Modifier.width(8.dp))
-            CircleIconButton(
-                contentDescription = "新建对话",
-                onClick = onNewChatClick,
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
             ) {
-                SvgIcon(R.drawable.ic_action_new_chat, tint = colors.textPrimary, size = 19.dp)
+                if (state.isEmpty) {
+                    EmptyState(greeting = state.greeting)
+                } else {
+                    MessageStream(
+                        messages = state.messages,
+                        sessionTokens = state.sessionTokens,
+                        onToggleReasoning = onToggleReasoning,
+                        onCopy = onCopyMessage,
+                        onSpeak = onSpeakMessage,
+                        onShare = onShareMessage,
+                        onRegenerate = onRegenerate,
+                        onRetry = onRetryMessage,
+                        onBranchPrev = onBranchPrev,
+                        onBranchNext = onBranchNext,
+                    )
+                    BottomFadeMask(
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                        height = if (imeBottomPx > 0) 0 else 28,
+                    )
+                }
+            }
+
+            DsInputBar(
+                modifier = Modifier
+                    .padding(bottom = inputBottomPadding)
+                    // 录音时保持挂载（手势不中断），视觉上让位给全屏录音样式
+                    .alpha(if (voiceRecording) 0f else 1f),
+                state = state.input,
+                generating = state.isGenerating,
+                onTextChange = onTextChange,
+                onToggleDeepThinking = onToggleDeepThinking,
+                onToggleSmartSearch = onToggleSmartSearch,
+                onAttachClick = { attachOpen = !attachOpen },
+                onRemoveAttachment = onRemoveAttachment,
+                onToggleMode = onToggleInputMode,
+                onDismissTranscribedNotice = onDismissTranscribedNotice,
+                onVoiceStart = onVoiceStart,
+                onVoiceCancelChange = onVoiceCancelChange,
+                onVoiceEnd = onVoiceEnd,
+                onSend = onSend,
+                onStop = onStop,
+            )
+
+            AnimatedVisibility(
+                visible = attachOpen && !voiceRecording,
+                enter = fadeIn() + slideInVertically { it / 4 },
+                exit = fadeOut() + slideOutVertically { it / 4 },
+            ) {
+                AttachmentPanel(
+                    onCamera = {
+                        attachOpen = false
+                        onPickCamera()
+                    },
+                    onGallery = {
+                        attachOpen = false
+                        onPickGallery()
+                    },
+                    onFile = {
+                        attachOpen = false
+                        onPickFile()
+                    },
+                )
+            }
+
+            // 附件面板展开 / 录音中让位（官方这两块内容都不显示）
+            if (!attachOpen && !voiceRecording) {
+                Text(
+                    text = "回答由 AI 生成，仅供参考",
+                    style = DsText.meta.copy(fontSize = 12.sp),
+                    color = colors.textTertiary,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = DisclaimerBlockTopPadding, bottom = DisclaimerBlockBottomPadding),
+                )
             }
         }
 
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-        ) {
-            if (state.isEmpty) {
-                EmptyState(greeting = state.greeting)
-            } else {
-                MessageStream(
-                    messages = state.messages,
-                    sessionTokens = state.sessionTokens,
-                    onToggleReasoning = onToggleReasoning,
-                    onCopy = onCopyMessage,
-                    onSpeak = onSpeakMessage,
-                    onShare = onShareMessage,
-                    onRegenerate = onRegenerate,
-                    onRetry = onRetryMessage,
-                    onBranchPrev = onBranchPrev,
-                    onBranchNext = onBranchNext,
-                )
-                BottomFadeMask(
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                    height = if (imeBottomPx > 0) 0 else 28,
-                )
-            }
+        // 按住说话：整屏泛光 + 提示 + 波形（盖在最上层；纯绘制，不拦触摸）
+        if (voiceRecording) {
+            VoiceOverlay(cancel = voiceCancel, levels = voiceLevels)
         }
-
-        DsInputBar(
-            modifier = Modifier.padding(bottom = inputBottomPadding),
-            state = state.input,
-            generating = state.isGenerating,
-            onTextChange = onTextChange,
-            onToggleDeepThinking = onToggleDeepThinking,
-            onToggleSmartSearch = onToggleSmartSearch,
-            onAttachClick = onAttachClick,
-            onToggleMode = onToggleInputMode,
-            onDismissTranscribedNotice = onDismissTranscribedNotice,
-            onSend = onSend,
-            onStop = onStop,
-        )
-
-        // 始终渲染（高度固定），键盘弹起时被键盘遮住即可；不再增删节点，避免整页回跳
-        Text(
-            text = "回答由 AI 生成，仅供参考",
-            style = DsText.meta.copy(fontSize = 12.sp),
-            color = colors.textTertiary,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(top = DisclaimerBlockTopPadding, bottom = DisclaimerBlockBottomPadding),
-        )
     }
 }
 

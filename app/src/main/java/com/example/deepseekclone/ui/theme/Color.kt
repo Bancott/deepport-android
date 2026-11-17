@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.theme
+package com.example.deepseekclone.ui.theme
 
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
@@ -44,6 +44,8 @@ data class DsColors(
     val drawerSurface: Color,
     /** 抽屉推开后，下层页面被提亮的表面色 */
     val pushedPage: Color,
+    /** 附件面板里的大方块按钮底 */
+    val tile: Color,
 )
 
 val DsLightColors = DsColors(
@@ -70,6 +72,7 @@ val DsLightColors = DsColors(
     toast = Color(0xFF3C3C3E),
     drawerSurface = Color(0xFFF8F8F8),
     pushedPage = Color(0xFFFFFFFF),
+    tile = Color(0xFFF2F2F2),
 )
 
 val DsDarkColors = DsColors(
@@ -96,6 +99,7 @@ val DsDarkColors = DsColors(
     toast = Color(0xFF47484A),
     drawerSurface = Color(0xFF0F0F0F),
     pushedPage = Color(0xFF1D1D1D),
+    tile = Color(0xFF3C3C3C),
 )
 
 
