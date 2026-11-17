@@ -3,7 +3,6 @@ package com.example.deepseekclone.ui.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,39 +37,74 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.deepseekclone.data.ModelInfo
+import com.example.deepseekclone.data.ModelRepository
 import com.example.deepseekclone.data.SettingsStore
 import com.example.deepseekclone.ui.common.CircleIconButton
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 
 /**
- * 模型设置（复刻版新增页）：API Key / Base URL / 模型 / 连通性测试。
- * 这是唯一需要用户自己填 Key 的地方，官方 App 没有这一页。
+ * 模型设置（复刻版新增页）。
+ * 模型列表不写死：填写 Key 后自动请求 `GET {BaseURL}/models`，
+ * 用供应商返回的 id / 名称 / 上下文长度渲染，选中的 id 存本地。
  */
 @Composable
 fun ModelSettingsScreen(
     store: SettingsStore,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    repository: ModelRepository = remember { ModelRepository() },
 ) {
     val colors = DsTheme.colors
     var keyVisible by remember { mutableStateOf(false) }
-    var testing by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf<String?>(null) }
-    var resultOk by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var models by remember { mutableStateOf<List<ModelInfo>>(emptyList()) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var statusOk by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    fun loadModels() {
+        if (loading) return
+        if (store.apiKey.isBlank()) {
+            statusOk = false
+            status = "请先填写 API Key"
+            return
+        }
+        loading = true
+        status = null
+        scope.launch {
+            val result = repository.fetchModels(store.baseUrl, store.apiKey)
+            result.onSuccess { list ->
+                models = list
+                statusOk = list.isNotEmpty()
+                status = if (list.isEmpty()) {
+                    "接口未返回任何模型"
+                } else {
+                    "已获取 ${list.size} 个模型，选择后即可对话"
+                }
+                if (list.isNotEmpty() && list.none { it.id == store.model }) {
+                    store.updateModel(list.first().id)
+                }
+            }.onFailure {
+                statusOk = false
+                status = it.message ?: "获取模型失败"
+            }
+            loading = false
+        }
+    }
+
+    // 填了 Key 就自动拉一次列表
+    LaunchedEffect(store.baseUrl, store.apiKey) {
+        if (store.apiKey.isNotBlank() && models.isEmpty()) loadModels()
+    }
 
     Column(
         modifier = modifier
@@ -144,62 +179,63 @@ fun ModelSettingsScreen(
                 )
             }
 
-            SectionLabel("模型")
-            SettingsCard {
-                SettingsStore.MODELS.forEachIndexed { index, (id, desc) ->
-                    ModelRow(
-                        id = id,
-                        desc = desc,
-                        selected = store.model == id,
-                        onClick = { store.updateModel(id) },
-                    )
-                    if (index != SettingsStore.MODELS.lastIndex) Divider()
-                }
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            // 连通性测试
+            // 主按钮：连接并获取模型（保留原来的按钮形式）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 20.dp)
                     .height(52.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(if (testing) colors.surface2 else colors.primary)
-                    .clickable(enabled = !testing) {
-                        testing = true
-                        result = null
-                        scope.launch {
-                            val r = testConnection(store.baseUrl, store.apiKey)
-                            resultOk = r.startsWith("连接成功")
-                            result = r
-                            testing = false
-                        }
-                    },
+                    .background(if (loading) colors.surface2 else colors.primary)
+                    .clickable(enabled = !loading) { loadModels() },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = if (testing) "正在测试…" else "测试连接",
+                    text = when {
+                        loading -> "正在获取模型…"
+                        models.isEmpty() -> "连接并获取模型"
+                        else -> "刷新模型列表"
+                    },
                     style = DsText.button,
-                    color = if (testing) colors.textSecondary else colors.onPrimary,
+                    color = if (loading) colors.textSecondary else colors.onPrimary,
                 )
             }
 
-            result?.let { text ->
+            status?.let { text ->
                 Text(
                     text = text,
                     style = DsText.caption,
-                    color = if (resultOk) colors.textSecondary else colors.danger,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    color = if (statusOk) colors.textSecondary else colors.danger,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
                 )
             }
 
+            SectionLabel("模型")
+            if (models.isEmpty()) {
+                Text(
+                    text = "填写 Key 后点击上方按钮，模型列表由供应商接口返回，不在本地写死。",
+                    style = DsText.caption,
+                    color = colors.textSecondary,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                )
+            } else {
+                SettingsCard {
+                    models.forEachIndexed { index, model ->
+                        ModelRow(
+                            model = model,
+                            selected = store.model == model.id,
+                            onClick = { store.updateModel(model.id) },
+                        )
+                        if (index != models.lastIndex) Divider()
+                    }
+                }
+            }
+
             Text(
-                text = "Key 只保存在本机，用于调用 DeepSeek 开放平台接口；本 App 不代理、不上传你的 Key。",
+                text = "Key 只保存在本机，用于调用你填写的 Base URL；本 App 不代理、不上传你的 Key。",
                 style = DsText.caption.copy(fontSize = 12.sp),
                 color = colors.textSecondary,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
             )
         }
     }
@@ -287,8 +323,7 @@ private fun FieldRow(
 
 @Composable
 private fun ModelRow(
-    id: String,
-    desc: String,
+    model: ModelInfo,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
@@ -296,9 +331,9 @@ private fun ModelRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .heightIn(min = 64.dp)
             .clickable(role = Role.RadioButton, onClick = onClick)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -312,14 +347,25 @@ private fun ModelRow(
                 ),
         )
         Spacer(Modifier.width(14.dp))
-        Column {
+        Column(Modifier.weight(1f)) {
             Text(
-                text = id,
+                text = model.name,
                 style = DsText.label,
                 color = colors.textPrimary,
             )
             Text(
-                text = desc,
+                text = buildString {
+                    append(model.id)
+                    if (model.contextWindow > 0) {
+                        append(" · 上下文 ")
+                        append(formatTokens(model.contextWindow))
+                    }
+                    if (model.supportsImage) append(" · 支持图片")
+                    if (model.effortLevels.isNotEmpty()) {
+                        append(" · effort ")
+                        append(model.effortLevels.joinToString("/"))
+                    }
+                },
                 style = DsText.caption.copy(fontSize = 12.sp),
                 color = colors.textSecondary,
             )
@@ -327,28 +373,8 @@ private fun ModelRow(
     }
 }
 
-/** 极简连通性测试：GET {base}/models，返回状态码即可（不引入 OkHttp）。 */
-private suspend fun testConnection(baseUrl: String, apiKey: String): String =
-    withContext(Dispatchers.IO) {
-        if (apiKey.isBlank()) return@withContext "尚未填写 API Key"
-        val url = baseUrl.trimEnd('/') + "/models"
-        try {
-            val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 10_000
-                readTimeout = 10_000
-                setRequestProperty("Authorization", "Bearer $apiKey")
-                setRequestProperty("Accept", "application/json")
-            }
-            val code = conn.responseCode
-            conn.disconnect()
-            when {
-                code in 200..299 -> "连接成功（HTTP $code），可以开始对话"
-                code == 401 -> "连接失败：API Key 无效（HTTP 401）"
-                code == 403 -> "连接失败：无权限（HTTP 403）"
-                else -> "连接失败：HTTP $code"
-            }
-        } catch (e: Exception) {
-            "连接失败：${e.javaClass.simpleName} ${e.message.orEmpty()}"
-        }
-    }
+private fun formatTokens(value: Int): String = when {
+    value >= 1_000_000 -> "${value / 1_000_000}M"
+    value >= 1_000 -> "${value / 1_000}K"
+    else -> value.toString()
+}

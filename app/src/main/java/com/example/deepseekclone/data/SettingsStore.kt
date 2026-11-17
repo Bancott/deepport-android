@@ -1,4 +1,4 @@
-package com.example.deepseekclone.data
+﻿package com.example.deepseekclone.data
 
 import android.content.Context
 import androidx.compose.runtime.getValue
@@ -23,7 +23,7 @@ class SettingsStore(context: Context) {
         private set
 
     var model by mutableStateOf(
-        prefs.getString(KEY_MODEL, DEFAULT_MODEL).orEmpty().ifBlank { DEFAULT_MODEL },
+        prefs.getString(KEY_MODEL, "").orEmpty(),
     )
         private set
 
@@ -52,7 +52,8 @@ class SettingsStore(context: Context) {
 
     companion object {
         const val DEFAULT_BASE = "https://api.deepseek.com"
-        const val DEFAULT_MODEL = "deepseek-reasoner"
+        /** 模型 id 由 GET /models 决定，本地不写死 */
+        const val DEFAULT_MODEL = ""
         val MODELS = listOf(
             "deepseek-chat" to "通用对话（V3）",
             "deepseek-reasoner" to "深度思考（R1）",
@@ -63,3 +64,4 @@ class SettingsStore(context: Context) {
         private const val KEY_MODEL = "model"
     }
 }
+
