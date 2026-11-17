@@ -22,6 +22,14 @@ class SettingsStore private constructor(context: Context) {
     )
         private set
 
+    /** system / light / dark */
+    var themeMode by mutableStateOf(prefs.getString(KEY_THEME, "system").orEmpty())
+        private set
+
+    /** 字体缩放：0 = 跟随系统 */
+    var fontScale by mutableStateOf(prefs.getFloat(KEY_FONT, 0f))
+        private set
+
     var model by mutableStateOf(
         prefs.getString(KEY_MODEL, "").orEmpty(),
     )
@@ -35,6 +43,16 @@ class SettingsStore private constructor(context: Context) {
     fun updateBaseUrl(value: String) {
         baseUrl = value
         persist()
+    }
+
+    fun updateThemeMode(value: String) {
+        themeMode = value
+        prefs.edit().putString(KEY_THEME, value).apply()
+    }
+
+    fun updateFontScale(value: Float) {
+        fontScale = value
+        prefs.edit().putFloat(KEY_FONT, value).apply()
     }
 
     fun updateModel(value: String) {
@@ -69,7 +87,10 @@ class SettingsStore private constructor(context: Context) {
         private const val KEY_API = "api_key"
         private const val KEY_BASE = "base_url"
         private const val KEY_MODEL = "model"
+        private const val KEY_THEME = "theme_mode"
+        private const val KEY_FONT = "font_scale"
     }
 }
+
 
 

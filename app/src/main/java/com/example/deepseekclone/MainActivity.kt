@@ -7,11 +7,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.deepseekclone.data.SettingsStore
@@ -23,6 +26,10 @@ import com.example.deepseekclone.ui.chat.ConversationUi
 import com.example.deepseekclone.ui.chat.DrawerUiState
 import com.example.deepseekclone.ui.chat.PushDrawerLayout
 import com.example.deepseekclone.ui.settings.AccountScreen
+import com.example.deepseekclone.ui.settings.AppearanceOptions
+import com.example.deepseekclone.ui.settings.FontSizeScreen
+import com.example.deepseekclone.ui.settings.LanguageOptions
+import com.example.deepseekclone.ui.settings.SingleChoiceDialog
 import com.example.deepseekclone.ui.settings.DataScreen
 import com.example.deepseekclone.ui.settings.ModelSettingsScreen
 import com.example.deepseekclone.ui.settings.PersonalizationScreen
@@ -34,14 +41,27 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            DeepSeekTheme {
-                App()
+            val context = LocalContext.current
+            val store = remember { SettingsStore.get(context) }
+            val dark = when (store.themeMode) {
+                "dark" -> true
+                "light" -> false
+                else -> isSystemInDarkTheme()
+            }
+            DeepSeekTheme(darkTheme = dark) {
+                val density = LocalDensity.current
+                val scale = if (store.fontScale > 0f) store.fontScale else density.fontScale
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density.density, scale),
+                ) {
+                    App()
+                }
             }
         }
     }
 }
 
-private enum class Screen { Chat, Settings, Model, Account, Data, Personalization }
+private enum class Screen { Chat, Settings, Model, Account, Data, Personalization, FontSize }
 
 @Composable
 private fun App() {
@@ -53,6 +73,8 @@ private fun App() {
     var screen by remember { mutableStateOf(Screen.Chat) }
     var drawerOpen by remember { mutableStateOf(false) }
     var drawer by remember { mutableStateOf(DrawerUiState(groups = demoConversations())) }
+    var showAppearance by remember { mutableStateOf(false) }
+    var showLanguage by remember { mutableStateOf(false) }
 
     // 返回栈：模型设置 → 设置 → 会话；抽屉打开时先关抽屉。只有主界面才真正退出。
     BackHandler(enabled = screen != Screen.Chat) {
@@ -66,7 +88,35 @@ private fun App() {
         drawerOpen = false
     }
 
+    if (showAppearance) {
+        SingleChoiceDialog(
+            title = "外观",
+            options = AppearanceOptions,
+            selected = store.themeMode,
+            onSelect = {
+                store.updateThemeMode(it)
+                showAppearance = false
+            },
+            onDismiss = { showAppearance = false },
+        )
+    }
+    if (showLanguage) {
+        SingleChoiceDialog(
+            title = "语言",
+            options = LanguageOptions,
+            selected = "zh-CN",
+            onSelect = { showLanguage = false },
+            onDismiss = { showLanguage = false },
+        )
+    }
+
     when (screen) {
+        Screen.FontSize -> FontSizeScreen(
+            current = store.fontScale,
+            onBack = { screen = Screen.Settings },
+            onSelect = { store.updateFontScale(it) },
+        )
+
         Screen.Account -> AccountScreen(onBack = { screen = Screen.Settings })
 
         Screen.Data -> DataScreen(onBack = { screen = Screen.Settings })
@@ -81,12 +131,16 @@ private fun App() {
         Screen.Settings -> SettingsScreen(
             versionName = "0.1.0(1)",
             modelLabel = store.model.ifBlank { "未配置" },
+            themeLabel = AppearanceOptions.firstOrNull { it.first == store.themeMode }?.second ?: "跟随系统",
             isSystemDark = isSystemInDarkTheme(),
             onBack = { screen = Screen.Chat },
             onModel = { screen = Screen.Model },
             onAccount = { screen = Screen.Account },
             onData = { screen = Screen.Data },
             onPersonalization = { screen = Screen.Personalization },
+            onFontSize = { screen = Screen.FontSize },
+            onLanguage = { showLanguage = true },
+            onAppearance = { showAppearance = true },
         )
 
         Screen.Chat -> PushDrawerLayout(
@@ -195,5 +249,10 @@ private fun demoConversations(): List<ConversationGroup> = listOf(
         ),
     ),
 )
+
+
+
+
+
 
 

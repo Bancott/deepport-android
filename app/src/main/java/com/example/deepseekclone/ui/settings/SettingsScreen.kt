@@ -58,6 +58,7 @@ import com.example.deepseekclone.ui.theme.DsTheme
 fun SettingsScreen(
     versionName: String,
     modelLabel: String,
+    themeLabel: String = "跟随系统",
     isSystemDark: Boolean,
     onBack: () -> Unit,
     onAccount: () -> Unit = {},
@@ -131,7 +132,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = if (isSystemDark) Icons.Outlined.DarkMode else Icons.Outlined.LightMode,
                     title = "外观",
-                    value = "跟随系统",
+                    value = themeLabel,
                     onClick = onAppearance,
                 )
                 SettingsRow(Icons.Outlined.FormatSize, "字体大小", onClick = onFontSize)
@@ -236,6 +237,9 @@ private fun SettingsRow(
         )
     }
 }
+
+
+
 
 
 

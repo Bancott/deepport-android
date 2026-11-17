@@ -24,7 +24,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -63,6 +65,7 @@ fun PushDrawerLayout(
     content: @Composable () -> Unit,
 ) {
     val colors = DsTheme.colors
+    val isLight = colors.bg.luminance() > 0.5f
     var progress by remember { mutableFloatStateOf(if (drawerOpen) 1f else 0f) }
     val scope = rememberCoroutineScope()
     val velocityTracker = remember { VelocityTracker() }
@@ -159,6 +162,22 @@ fun PushDrawerLayout(
                     },
             ) {
                 drawer(Modifier.fillMaxSize())
+
+                // 浅色模式：官方在抽屉右缘有约 24dp 的柔和投影（#FCFCFC → #F0F0F0），
+                // 深色模式没有，所以只在这里画。
+                if (isLight) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .width(28.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.07f)),
+                                ),
+                            ),
+                    )
+                }
             }
 
             /* ---------- 2. 会话页（上层卡片） ---------- */
@@ -189,7 +208,7 @@ fun PushDrawerLayout(
                 }
 
                 // 卡片左缘 1dp 高光（官方 ≈ #2B2B2B）
-                if (pageLifted.value) {
+                if (!isLight && pageLifted.value) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
@@ -212,6 +231,7 @@ fun PushDrawerLayout(
         }
     }
 }
+
 
 
 

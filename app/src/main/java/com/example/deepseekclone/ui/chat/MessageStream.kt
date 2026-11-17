@@ -27,6 +27,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -75,7 +81,24 @@ fun MessageStream(
     onBranchPrev: (MessageUi) -> Unit = {},
     onBranchNext: (MessageUi) -> Unit = {},
 ) {
+    // 自动跟随：用户停在底部时，新内容到达自动滚到底；一旦手动上滑即暂停跟随
+    val listState = rememberLazyListState()
+    var follow by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            last == null || last.index >= info.totalItemsCount - 1
+        }.collect { follow = it }
+    }
+    LaunchedEffect(messages.size, messages.lastOrNull()?.text?.length, messages.lastOrNull()?.reasoning?.length) {
+        if (follow && messages.isNotEmpty()) {
+            listState.scrollToItem(messages.lastIndex, scrollOffset = 10_000)
+        }
+    }
+
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 6.dp, bottom = 10.dp),
     ) {
@@ -539,6 +562,8 @@ private fun TokenInline(message: MessageUi, sessionTokens: Int) {
         )
     }
 }
+
+
 
 
 
