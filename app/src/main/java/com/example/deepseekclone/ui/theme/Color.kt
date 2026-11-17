@@ -21,6 +21,7 @@ data class DsColors(
     /** 三级表面：弹窗、气泡、序号徽标 */
     val surface3: Color,
     val dialog: Color,
+    val fieldBg: Color,
     /** 用户气泡 */
     val bubble: Color,
     /** 功能 chip 底（= 主色 12%） */
@@ -52,6 +53,7 @@ val DsLightColors = DsColors(
     surface2 = Color(0xFFFFFFFF),
     surface3 = Color(0xFFFFFFFF),
     dialog = Color(0xFFFFFFFF),
+    fieldBg = Color(0xFFF2F2F2),
     bubble = Color(0xFFEFF3FE),
     chipBg = Color(0xFFEFF3FE),
     chipContent = Color(0xFF4C6EF6),
@@ -77,6 +79,7 @@ val DsDarkColors = DsColors(
     surface2 = Color(0xFF292929),
     surface3 = Color(0xFF333333),
     dialog = Color(0xFF2C2C2C),
+    fieldBg = Color(0xFF242424),
     bubble = Color(0xFF333333),
     chipBg = Color(0xFF2B3242),
     chipContent = Color(0xFF7A9AF3),
@@ -94,5 +97,6 @@ val DsDarkColors = DsColors(
     drawerSurface = Color(0xFF0F0F0F),
     pushedPage = Color(0xFF1D1D1D),
 )
+
 
 

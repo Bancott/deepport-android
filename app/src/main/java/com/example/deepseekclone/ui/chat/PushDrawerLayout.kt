@@ -24,6 +24,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -60,7 +62,7 @@ fun PushDrawerLayout(
     drawerOpen: Boolean,
     onDrawerOpenChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    drawerWidthFraction: Float = 0.82f,
+    drawerWidthFraction: Float = 0.80f,
     drawer: @Composable (Modifier) -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -170,10 +172,10 @@ fun PushDrawerLayout(
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
                             .fillMaxHeight()
-                            .width(28.dp)
+                            .width(30.dp)
                             .background(
                                 Brush.horizontalGradient(
-                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.07f)),
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.035f)),
                                 ),
                             ),
                     )
@@ -187,13 +189,16 @@ fun PushDrawerLayout(
                     .graphicsLayer {
                         val pageP = progress.pow(LAG_POWER)
                         translationX = drawerWidthPx * pageP
-                        val s = 1f - 0.07f * pageP
+                        val s = 1f - 0.052f * pageP
                         scaleX = s
                         scaleY = s
-                        // 常驻 clip：避免动画中途切换 clip 属性导致图层重建
-                        clip = true
-                        shape = RoundedCornerShape(20.dp)
                     }
+                    .shadow(
+                        elevation = 16.dp,
+                        shape = RoundedCornerShape(20.dp),
+                        clip = false,
+                    )
+                    .clip(RoundedCornerShape(20.dp))
                     .background(colors.pushedPage),
             ) {
                 Box(
@@ -201,7 +206,7 @@ fun PushDrawerLayout(
                         .fillMaxSize()
                         .graphicsLayer {
                             val pageP = progress.pow(LAG_POWER)
-                            alpha = 1f - 0.62f * pageP
+                            alpha = if (isLight) 1f - 0.75f * pageP else 1f - 0.62f * pageP
                         },
                 ) {
                     content()
@@ -231,6 +236,11 @@ fun PushDrawerLayout(
         }
     }
 }
+
+
+
+
+
 
 
 

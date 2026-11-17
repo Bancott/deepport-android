@@ -137,7 +137,7 @@ private fun SearchField(onClick: () -> Unit) {
             .padding(horizontal = 16.dp)
             .height(42.dp)
             .clip(CircleShape)
-            .background(colors.surface2)
+            .background(colors.fieldBg)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -460,6 +460,7 @@ private fun DrawerFooter(name: String, onClick: () -> Unit) {
         )
     }
 }
+
 
 
 
