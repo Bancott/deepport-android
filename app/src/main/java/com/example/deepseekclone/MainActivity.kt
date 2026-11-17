@@ -1,4 +1,4 @@
-package com.example.deepseekclone
+﻿package com.example.deepseekclone
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -70,7 +70,7 @@ private fun App() {
 
         Screen.Chat -> PushDrawerLayout(
             drawerOpen = drawerOpen,
-            onDismiss = { drawerOpen = false },
+            onDrawerOpenChange = { drawerOpen = it },
             drawer = { modifier ->
                 ConversationDrawer(
                     state = drawer,
@@ -297,3 +297,4 @@ private fun demoConversations(): List<ConversationGroup> = listOf(
         ),
     ),
 )
+
