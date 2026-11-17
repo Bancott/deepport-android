@@ -22,7 +22,10 @@ import com.example.deepseekclone.ui.chat.ConversationGroup
 import com.example.deepseekclone.ui.chat.ConversationUi
 import com.example.deepseekclone.ui.chat.DrawerUiState
 import com.example.deepseekclone.ui.chat.PushDrawerLayout
+import com.example.deepseekclone.ui.settings.AccountScreen
+import com.example.deepseekclone.ui.settings.DataScreen
 import com.example.deepseekclone.ui.settings.ModelSettingsScreen
+import com.example.deepseekclone.ui.settings.PersonalizationScreen
 import com.example.deepseekclone.ui.settings.SettingsScreen
 import com.example.deepseekclone.ui.theme.DeepSeekTheme
 
@@ -38,7 +41,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Chat, Settings, Model }
+private enum class Screen { Chat, Settings, Model, Account, Data, Personalization }
 
 @Composable
 private fun App() {
@@ -54,7 +57,7 @@ private fun App() {
     // 返回栈：模型设置 → 设置 → 会话；抽屉打开时先关抽屉。只有主界面才真正退出。
     BackHandler(enabled = screen != Screen.Chat) {
         screen = when (screen) {
-            Screen.Model -> Screen.Settings
+            Screen.Model, Screen.Account, Screen.Data, Screen.Personalization -> Screen.Settings
             Screen.Settings -> Screen.Chat
             else -> Screen.Chat
         }
@@ -64,6 +67,12 @@ private fun App() {
     }
 
     when (screen) {
+        Screen.Account -> AccountScreen(onBack = { screen = Screen.Settings })
+
+        Screen.Data -> DataScreen(onBack = { screen = Screen.Settings })
+
+        Screen.Personalization -> PersonalizationScreen(onBack = { screen = Screen.Settings })
+
         Screen.Model -> ModelSettingsScreen(
             store = store,
             onBack = { screen = Screen.Settings },
@@ -75,6 +84,9 @@ private fun App() {
             isSystemDark = isSystemInDarkTheme(),
             onBack = { screen = Screen.Chat },
             onModel = { screen = Screen.Model },
+            onAccount = { screen = Screen.Account },
+            onData = { screen = Screen.Data },
+            onPersonalization = { screen = Screen.Personalization },
         )
 
         Screen.Chat -> PushDrawerLayout(
@@ -183,4 +195,5 @@ private fun demoConversations(): List<ConversationGroup> = listOf(
         ),
     ),
 )
+
 
