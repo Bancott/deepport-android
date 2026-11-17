@@ -535,6 +535,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         var firstContentAt = 0L
         var usage: TokenUsage? = null
         var sources: List<SourceItem> = emptyList()
+        var finishReason: String? = null
 
         fun flush(force: Boolean = false) {
             val now = System.currentTimeMillis()
@@ -619,12 +620,20 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                         _state.update { it.copy(messages = activePath()) }
                     }
 
+                    is StreamEvent.Finish -> {
+                        finishReason = event.reason
+                    }
+
                     StreamEvent.Done -> Unit
                 }
             }
             flush(force = true)
             nodes[assistantId]?.let {
-                nodes[assistantId] = it.copy(status = MessageStatus.Completed, usage = usage)
+                nodes[assistantId] = it.copy(
+                    status = MessageStatus.Completed,
+                    usage = usage,
+                    finishReason = finishReason,
+                )
             }
             _state.update {
                 it.copy(

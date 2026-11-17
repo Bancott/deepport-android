@@ -82,6 +82,8 @@ data class MessageUi(
     val branchCount: Int = 1,
     /** 失败原因，如"请检查网络后重试" */
     val errorHint: String? = null,
+    /** 接口返回的 finish_reason：length 表示被输出额度截断，stop 表示正常结束 */
+    val finishReason: String? = null,
     /** 父节点 id；null 表示会话第一条消息 */
     val parentId: String? = null,
     /** 本条消息携带的附件（用户消息才有） */

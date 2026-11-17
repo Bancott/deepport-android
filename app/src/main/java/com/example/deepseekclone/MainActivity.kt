@@ -373,6 +373,7 @@ private fun App() {
                 onBranchPrev = { vm.selectBranch(it, -1) },
                 onBranchNext = { vm.selectBranch(it, 1) },
                 onEditMessage = { editTarget = it },
+                onOpenSource = { url -> webTarget = url to "来源" },
                 onCopyMessage = { message ->
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText("message", message.text))

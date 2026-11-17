@@ -1,6 +1,5 @@
 package com.example.deepseekclone.ui.chat
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,11 +29,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import com.example.deepseekclone.ui.common.GlobeGlyph
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
@@ -48,17 +47,10 @@ import com.example.deepseekclone.ui.theme.DsTheme
 fun SourcesSheet(
     sources: List<SourceItem>,
     onDismiss: () -> Unit,
+    onOpen: (String) -> Unit,
 ) {
     val colors = DsTheme.colors
-    val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    fun open(url: String) {
-        if (url.isBlank()) return
-        runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-        }
-    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -108,6 +100,15 @@ fun SourcesSheet(
                     .height(1.dp)
                     .background(colors.outline),
             )
+            if (sources.isEmpty()) {
+                Text(
+                    text = "这条回答没有记录来源明细",
+                    style = DsText.caption.copy(fontSize = 13.sp),
+                    color = colors.textTertiary,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                )
+                return@Column
+            }
             LazyColumn(
                 modifier = Modifier.heightIn(max = 460.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
@@ -118,11 +119,13 @@ fun SourcesSheet(
                 ),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                itemsIndexed(sources, key = { index, item -> "$index-${item.url}" }) { index, item ->
+                itemsIndexed(sources, key = { index, item -> "$index-${item.url}" }) { _, item ->
                     SourceRow(
-                        index = index + 1,
                         source = item,
-                        onClick = { open(item.url) },
+                        onClick = {
+                            onDismiss()
+                            onOpen(item.url)
+                        },
                     )
                 }
             }
@@ -132,7 +135,6 @@ fun SourcesSheet(
 
 @Composable
 private fun SourceRow(
-    index: Int,
     source: SourceItem,
     onClick: () -> Unit,
 ) {
@@ -146,6 +148,21 @@ private fun SourceRow(
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // 站点徽标：取域名首字母 + 按域名散列取色，离线也有稳定图标
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(siteColor(source.host)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = source.host.take(1).uppercase(),
+                    style = DsText.meta.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = source.host,
                 style = DsText.caption.copy(fontSize = 12.sp),
@@ -153,11 +170,6 @@ private fun SourceRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = index.toString(),
-                style = DsText.meta.copy(fontSize = 11.sp),
-                color = colors.textTertiary,
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -179,4 +191,19 @@ private fun SourceRow(
             )
         }
     }
+}
+
+/** 按域名散列出一组固定颜色，保证同一站点每次都是同一个徽标色 */
+private fun siteColor(host: String): Color {
+    val palette = listOf(
+        Color(0xFF4C6EF6),
+        Color(0xFF12A150),
+        Color(0xFFE06560),
+        Color(0xFF9A5CF5),
+        Color(0xFFE08A1E),
+        Color(0xFF1E9BB5),
+    )
+    if (host.isEmpty()) return palette[0]
+    val hash = host.fold(0) { acc, ch -> (acc * 31 + ch.code) and 0x7fffffff }
+    return palette[hash % palette.size]
 }

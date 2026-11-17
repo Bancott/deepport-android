@@ -18,6 +18,8 @@ sealed interface StreamEvent {
     data class Reasoning(val delta: String) : StreamEvent
     data class Content(val delta: String) : StreamEvent
     data class Usage(val promptTokens: Int, val completionTokens: Int, val reasoningTokens: Int) : StreamEvent
+    /** finish_reason，length 表示被输出额度截断 */
+    data class Finish(val reason: String) : StreamEvent
     /** 接口回传的联网搜索结果（不同网关字段名不一样，统一归一化成 SourceItem） */
     data class Sources(val items: List<SourceItem>) : StreamEvent
     data object Done : StreamEvent
@@ -107,11 +109,13 @@ class ChatRepository {
 
                     obj.optJSONArray("choices")?.let { choices ->
                         if (choices.length() > 0) {
-                            val delta = choices.getJSONObject(0).optJSONObject("delta")
+                            val choice = choices.getJSONObject(0)
+                            val delta = choice.optJSONObject("delta")
                             if (delta != null) {
                                 delta.optText("reasoning_content")?.let { emit(StreamEvent.Reasoning(it)) }
                                 delta.optText("content")?.let { emit(StreamEvent.Content(it)) }
                             }
+                            choice.optText("finish_reason")?.let { emit(StreamEvent.Finish(it)) }
                         }
                     }
 

@@ -160,6 +160,7 @@ class ConversationStore(context: Context) {
                     put("text", m.text)
                     put("reasoning", m.reasoning)
                     put("status", m.status.name)
+                    m.finishReason?.let { put("finishReason", it) }
                     put("reasoningSeconds", m.reasoningSeconds)
                     put("reasoningExpanded", m.reasoningExpanded)
                     m.usage?.let {
@@ -206,6 +207,7 @@ class ConversationStore(context: Context) {
                 usage = usage,
                 reasoningSeconds = o.optInt("reasoningSeconds"),
                 reasoningExpanded = o.optBoolean("reasoningExpanded"),
+                finishReason = if (o.has("finishReason") && !o.isNull("finishReason")) o.optString("finishReason") else null,
                 parentId = if (o.has("parentId") && !o.isNull("parentId")) o.optString("parentId") else null,
                 attachments = parseAttachments(o.optJSONArray("attachments")),
                 sources = sources,

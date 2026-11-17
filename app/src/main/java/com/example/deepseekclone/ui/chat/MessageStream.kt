@@ -227,6 +227,28 @@ private fun AssistantMessage(
             }
         }
 
+        // 生成完了却没有正文（思考把输出额度吃光）或明确被截断时给一句说明，别让用户对着空白发呆
+        val emptyAnswer = message.status == MessageStatus.Completed && message.text.isBlank()
+        if (emptyAnswer) {
+            Text(
+                text = if (message.finishReason == "length") {
+                    "回答达到长度上限被截断，可点重新生成再试"
+                } else {
+                    "这次没有生成正文，可点重新生成再试"
+                },
+                style = DsText.caption.copy(fontSize = 13.sp),
+                color = colors.textSecondary,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+        } else if (message.status == MessageStatus.Completed && message.finishReason == "length") {
+            Text(
+                text = "回答达到长度上限，已截断",
+                style = DsText.caption.copy(fontSize = 12.sp),
+                color = colors.textTertiary,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+
         if (message.status == MessageStatus.Aborted) {
             Text(
                 text = "已停止生成",

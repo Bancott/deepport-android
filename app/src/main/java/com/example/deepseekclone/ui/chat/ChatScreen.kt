@@ -89,6 +89,7 @@ fun ChatScreen(
     onRegenerate: (MessageUi) -> Unit = {},
     onRetryMessage: (MessageUi) -> Unit = {},
     onEditMessage: (MessageUi) -> Unit = {},
+    onOpenSource: (String) -> Unit = {},
     onBranchPrev: (MessageUi) -> Unit = {},
     onBranchNext: (MessageUi) -> Unit = {},
 ) {
@@ -238,7 +239,11 @@ fun ChatScreen(
         }
 
         sourcesSheet?.let { list ->
-            SourcesSheet(sources = list, onDismiss = { sourcesSheet = null })
+            SourcesSheet(
+                sources = list,
+                onDismiss = { sourcesSheet = null },
+                onOpen = { url -> onOpenSource(url) },
+            )
         }
     }
 }

@@ -5,28 +5,38 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.FlashOff
+import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,11 +47,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -51,10 +65,11 @@ import com.example.deepseekclone.ui.theme.DsText
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import kotlin.coroutines.resume
+import kotlin.math.roundToInt
 
 /**
- * 应用内相机（CameraX）：全屏预览 + 底部快门，拍完把临时文件交给上层导入附件。
- * minSdk 26 起 CameraX 全兼容；权限被拒时给一个明确的重新授权入口。
+ * 应用内相机（CameraX）：全屏预览 + 快门，另有闪光灯、前后摄切换、点按对焦。
+ * 拍完把临时文件交给上层导入附件；权限被拒时给一个明确的重新授权入口。
  */
 @Composable
 fun CameraScreen(
@@ -71,6 +86,13 @@ fun CameraScreen(
         )
     }
     var error by remember { mutableStateOf<String?>(null) }
+    var lensFacing by remember { mutableStateOf(CameraSelector.LENS_FACING_BACK) }
+    var torchOn by remember { mutableStateOf(false) }
+    var camera by remember { mutableStateOf<Camera?>(null) }
+    // 点按对焦：位置 + 透明度（点了才出现，1 秒后淡出）
+    var focusPoint by remember { mutableStateOf<Offset?>(null) }
+    val focusAlpha = remember { Animatable(0f) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { result -> granted = result }
@@ -97,25 +119,120 @@ fun CameraScreen(
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .build()
             }
-            AndroidView(
-                factory = { previewView },
-                modifier = Modifier.fillMaxSize(),
-            )
-            LaunchedEffect(previewView) {
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(previewView) {
+                        detectTapGestures { tap ->
+                            val point = previewView.meteringPointFactory
+                                .createPoint(tap.x, tap.y)
+                            val action = FocusMeteringAction.Builder(point).build()
+                            runCatching { camera?.cameraControl?.startFocusAndMetering(action) }
+                            focusPoint = tap
+                        }
+                    },
+            ) {
+                AndroidView(
+                    factory = { previewView },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            // 对焦圈：跟着点按位置出现，淡入后 0.9 秒淡出
+            LaunchedEffect(focusPoint) {
+                if (focusPoint != null) {
+                    focusAlpha.snapTo(0f)
+                    focusAlpha.animateTo(1f)
+                    kotlinx.coroutines.delay(900)
+                    focusAlpha.animateTo(0f)
+                    focusPoint = null
+                }
+            }
+            focusPoint?.let { point ->
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                (point.x - 34.dp.toPx()).roundToInt(),
+                                (point.y - 34.dp.toPx()).roundToInt(),
+                            )
+                        }
+                        .size(68.dp)
+                        .alpha(focusAlpha.value)
+                        .border(1.5.dp, Color.White.copy(alpha = 0.9f), RoundedCornerShape(6.dp)),
+                )
+            }
+
+            LaunchedEffect(previewView, lensFacing) {
                 runCatching {
                     val provider = context.cameraProvider()
+                    val selector = CameraSelector.Builder()
+                        .requireLensFacing(lensFacing)
+                        .build()
                     val preview = Preview.Builder().build().also {
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
                     provider.unbindAll()
-                    provider.bindToLifecycle(
+                    camera = provider.bindToLifecycle(
                         lifecycleOwner,
-                        CameraSelector.DEFAULT_BACK_CAMERA,
+                        selector,
                         preview,
                         imageCapture,
                     )
                     imageCapture.targetRotation = previewView.display?.rotation ?: 0
-                }.onFailure { error = "相机启动失败：${it.message.orEmpty()}" }
+                    // 换镜头后手电筒归零（前置一般没有闪光灯）
+                    camera?.cameraControl?.enableTorch(
+                        torchOn && camera?.cameraInfo?.hasFlashUnit() == true,
+                    )
+                }.onFailure {
+                    error = "相机启动失败：${it.message.orEmpty()}"
+                }
+            }
+
+            // 顶栏右侧：闪光灯 / 前后摄
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, end = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CircleIconButton(
+                    contentDescription = if (torchOn) "关闭闪光灯" else "打开闪光灯",
+                    onClick = {
+                        val next = !torchOn
+                        torchOn = next
+                        runCatching { camera?.cameraControl?.enableTorch(next) }
+                    },
+                    containerColor = Color.Black.copy(alpha = 0.35f),
+                ) {
+                    Icon(
+                        imageVector = if (torchOn) Icons.Outlined.FlashOn else Icons.Outlined.FlashOff,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                CircleIconButton(
+                    contentDescription = "切换前后摄像头",
+                    onClick = {
+                        torchOn = false
+                        lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
+                            CameraSelector.LENS_FACING_FRONT
+                        } else {
+                            CameraSelector.LENS_FACING_BACK
+                        }
+                    },
+                    containerColor = Color.Black.copy(alpha = 0.35f),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Cameraswitch,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
 
             Box(
@@ -152,7 +269,7 @@ fun CameraScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(32.dp),
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
@@ -173,20 +290,19 @@ fun CameraScreen(
             }
         }
 
-        // 顶栏：关闭 + 标题
-        Box(
+        // 顶栏：关闭 + 标题（关闭按钮单独放左边，右侧留给闪光灯/切换）
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .height(56.dp),
+                .height(56.dp)
+                .padding(start = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             CircleIconButton(
                 contentDescription = "关闭相机",
                 onClick = onClose,
                 containerColor = Color.Black.copy(alpha = 0.35f),
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 16.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
@@ -195,13 +311,16 @@ fun CameraScreen(
                     modifier = Modifier.size(20.dp),
                 )
             }
-            Text(
-                text = "拍照",
-                style = DsText.titleBar,
-                color = Color.White,
-                modifier = Modifier.align(Alignment.Center),
-            )
         }
+        Text(
+            text = "拍照",
+            style = DsText.titleBar,
+            color = Color.White,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 16.dp),
+        )
 
         error?.let { message ->
             Text(
