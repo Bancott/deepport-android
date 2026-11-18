@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,6 +77,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path as ComposePath
@@ -1397,7 +1399,8 @@ private fun MessageActionBar(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 8.dp)
-            .height(40.dp)
+            // 官方 2.8.0：整行 heightIn(min = 30dp)，不是固定 40dp
+            .heightIn(min = 30.dp)
             .offset(x = (-8.5).dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1411,15 +1414,15 @@ private fun MessageActionBar(
                     )
                 },
                 label = "上一条分支",
+                enabled = message.branchIndex > 1,
                 onClick = onBranchPrev,
             )
-            Text(
-                text = "${message.branchIndex}/${message.branchCount}",
-                style = DsText.caption.copy(fontSize = 13.sp),
-                color = colors.textSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 2.dp),
-            )
+            // 官方是「1」+ 4dp +「/」+ 4dp +「2」三段文本，15sp / 500 / 行高 18sp
+            BranchIndexText("${message.branchIndex}")
+            Spacer(Modifier.width(4.dp))
+            BranchIndexText("/")
+            Spacer(Modifier.width(4.dp))
+            BranchIndexText("${message.branchCount}")
             ActionIcon(
                 icon = { tint ->
                     SvgIcon(
@@ -1429,6 +1432,7 @@ private fun MessageActionBar(
                     )
                 },
                 label = "下一条分支",
+                enabled = message.branchIndex < message.branchCount,
                 onClick = onBranchNext,
             )
             Spacer(Modifier.width(10.dp))
@@ -1478,17 +1482,39 @@ private fun MessageActionBar(
 }
 
 @Composable
+private fun BranchIndexText(text: String) {
+    Text(
+        text = text,
+        style = DsText.caption.copy(
+            fontSize = 15.sp,
+            lineHeight = 18.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+            letterSpacing = 0.sp,
+        ),
+        color = DsTheme.colors.textSecondary,
+        textAlign = TextAlign.Center,
+    )
+}
+
+@Composable
 private fun ActionIcon(
     icon: @Composable (Color) -> Unit,
     label: String,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val colors = DsTheme.colors
     Box(
         modifier = Modifier
             .size(40.dp)
+            .alpha(if (enabled) 1f else 0.38f)
             .clip(CircleShape)
-            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = label,
+                onClick = onClick,
+            )
             // 动作条用的是矢量图（SvgIcon 内部 contentDescription 为 null），这里补语义给读屏和自动化
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
