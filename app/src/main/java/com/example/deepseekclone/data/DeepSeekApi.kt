@@ -194,6 +194,7 @@ class DeepSeekApi {
                             title = title.ifBlank { url },
                             url = url,
                             snippet = item.optString("snippet"),
+                            siteIcon = item.optString("site_icon"),
                         )
                     }
                 }
@@ -209,10 +210,14 @@ class DeepSeekApi {
                         val citation = delta.optJSONObject("citation")
                         val url = citation?.optString("url").orEmpty()
                         if (url.isNotBlank()) {
+                            val existing = sources[url]
                             sources[url] = SourceItem(
-                                title = citation?.optString("title").orEmpty().ifBlank { url },
+                                title = citation?.optString("title").orEmpty()
+                                    .ifBlank { existing?.title ?: url },
                                 url = url,
-                                snippet = citation?.optString("cited_text").orEmpty(),
+                                snippet = existing?.snippet?.takeIf { it.isNotBlank() }
+                                    ?: citation?.optString("cited_text").orEmpty(),
+                                siteIcon = existing?.siteIcon.orEmpty(),
                             )
                         }
                         null

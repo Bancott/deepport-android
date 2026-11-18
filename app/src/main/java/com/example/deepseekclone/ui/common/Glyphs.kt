@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.common
+﻿package com.example.deepseekclone.ui.common
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -65,15 +65,6 @@ fun DeepThinkGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 1
     )
 }
 
-@Composable
-fun NewChatGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 25.dp) {
-    Icon(
-        painter = painterResource(R.drawable.ic_new_chat),
-        contentDescription = null,
-        modifier = modifier.size(iconSize),
-        tint = color,
-    )
-}
 
 /** 智能搜索：用户提供的互联网（地球）矢量，1024 viewBox，图形约占 858/1024 */
 @Composable

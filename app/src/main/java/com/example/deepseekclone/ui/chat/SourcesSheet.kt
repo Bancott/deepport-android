@@ -1,5 +1,6 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,11 +31,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.ui.common.GlobeGlyph
+import com.example.deepseekclone.ui.common.rememberSiteIcon
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
 
@@ -148,19 +152,29 @@ private fun SourceRow(
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // 站点徽标：取域名首字母 + 按域名散列取色，离线也有稳定图标
+            // 站点图标：优先用接口下发的 site_icon（内存 + 磁盘缓存），失败回退首字母 + 散列配色
+            val icon = rememberSiteIcon(source.siteIcon)
             Box(
                 modifier = Modifier
                     .size(18.dp)
                     .clip(RoundedCornerShape(5.dp))
-                    .background(siteColor(source.host)),
+                    .background(if (icon == null) siteColor(source.host) else Color.Transparent),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = source.host.take(1).uppercase(),
-                    style = DsText.meta.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
-                    color = Color.White,
-                )
+                if (icon != null) {
+                    Image(
+                        bitmap = icon.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                } else {
+                    Text(
+                        text = source.host.take(1).uppercase(),
+                        style = DsText.meta.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                        color = Color.White,
+                    )
+                }
             }
             Spacer(Modifier.width(8.dp))
             Text(

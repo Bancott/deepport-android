@@ -20,6 +20,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import android.app.Activity
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
+import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,7 @@ import com.example.deepseekclone.ui.settings.ModelSettingsScreen
 import com.example.deepseekclone.ui.settings.PersonalizationScreen
 import com.example.deepseekclone.ui.settings.SettingsScreen
 import com.example.deepseekclone.ui.settings.VoiceToneDialog
+import com.example.deepseekclone.ui.share.ShareCard
 import com.example.deepseekclone.ui.theme.DeepSeekTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -404,11 +406,24 @@ private fun App() {
                     }
                 },
                 onShareMessage = { message ->
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, message.text)
+                    val file = ShareCard.render(context, chat.title, message.text)
+                    val uri = file?.let {
+                        FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            it,
+                        )
                     }
-                    context.startActivity(Intent.createChooser(intent, "分享"))
+                    if (uri != null) {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(intent, "分享"))
+                    } else {
+                        Toast.makeText(context, "这条回答还没有可分享的正文", Toast.LENGTH_SHORT).show()
+                    }
                 },
             )
         }

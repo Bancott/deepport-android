@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 官方 chat-demo 图标 IconGlobeLanguageOutline14，原样转 Android vector -->
+<!-- 官方 chat-demo 图标，源文件 tools/icons/chat-demo/globe.svg -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="14dp"
     android:height="14dp"

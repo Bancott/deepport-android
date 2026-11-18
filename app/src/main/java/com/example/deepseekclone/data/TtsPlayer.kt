@@ -1,7 +1,10 @@
 package com.example.deepseekclone.data
 
+import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
 import android.util.Log
 import kotlinx.coroutines.CancellationException
@@ -26,9 +29,28 @@ import org.json.JSONObject
  * 正常读完则等缓冲区播完再释放，避免尾音被截断。
  * 状态经 [state] 暴露给 UI，失败原因经 [error] 冒出去做 toast。
  */
-class TtsPlayer {
+class TtsPlayer(context: Context) {
 
     enum class State { Idle, Loading, Playing }
+
+    private val audioManager = context.applicationContext
+        .getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    /** 朗读期间持有的音频焦点；来电/别的 App 播放时会自动让出 */
+    private var focusRequest: AudioFocusRequest? = null
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            -> stop()
+
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK ->
+                activeTrack?.let { runCatching { it.setVolume(0.2f) } }
+
+            AudioManager.AUDIOFOCUS_GAIN ->
+                activeTrack?.let { runCatching { it.setVolume(1f) } }
+        }
+    }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _state = MutableStateFlow(State.Idle)
@@ -49,6 +71,11 @@ class TtsPlayer {
         val my = ++token
         job?.cancel()
         _error.value = null
+        if (!requestFocus()) {
+            _error.value = "暂时无法朗读：音频被其他应用占用"
+            _state.value = State.Idle
+            return
+        }
         _state.value = State.Loading
         job = scope.launch {
             try {
@@ -61,7 +88,10 @@ class TtsPlayer {
                     _error.value = e.message?.takeIf { it.isNotBlank() } ?: "朗读失败，请稍后重试"
                 }
             } finally {
-                if (my == token) _state.value = State.Idle
+                if (my == token) {
+                    _state.value = State.Idle
+                    abandonFocus()
+                }
             }
         }
     }
@@ -70,12 +100,35 @@ class TtsPlayer {
         token++
         job?.cancel()
         job = null
+        abandonFocus()
         // 先静音，再让 IO 任务在 write 返回后自行 release
         activeTrack?.let { track ->
             runCatching { track.pause() }
             runCatching { track.flush() }
         }
         _state.value = State.Idle
+    }
+
+    private fun requestFocus(): Boolean {
+        if (focusRequest != null) return true
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            .setOnAudioFocusChangeListener(focusListener)
+            .setWillPauseWhenDucked(true)
+            .build()
+        val granted = audioManager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        if (granted) focusRequest = request
+        return granted
+    }
+
+    private fun abandonFocus() {
+        focusRequest?.let { runCatching { audioManager.abandonAudioFocusRequest(it) } }
+        focusRequest = null
     }
 
     fun clearError() {

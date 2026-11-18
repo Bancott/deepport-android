@@ -7,6 +7,8 @@ import com.example.deepseekclone.ui.chat.MessageStatus
 import com.example.deepseekclone.ui.chat.MessageUi
 import com.example.deepseekclone.ui.chat.SourceItem
 import com.example.deepseekclone.ui.chat.TokenUsage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -64,63 +66,164 @@ data class StoredConversation(
 }
 
 /**
- * 会话列表存储（Data 层）。目前是 JSON + SharedPreferences，
- * 换成 Room 时只需替换本类实现。
+ * 会话存储（Room 版）：`conversations` 存元数据与分支选中关系，`messages` 存消息节点，
+ * 复杂字段（附件 / 来源）以 JSON 列保存；每次 upsert 只替换这一条会话的消息。
+ * 旧版 SharedPreferences 的 JSON 会在首次启动时一次性迁进 Room。
  */
 class ConversationStore(context: Context) {
 
     private val prefs = context.applicationContext
         .getSharedPreferences("ds_conversations", Context.MODE_PRIVATE)
+    private val dao = ChatDatabase.get(context.applicationContext).chatDao()
 
-    /** 全部会话：置顶优先（按置顶时间倒序），其余按更新时间倒序 */
-    fun loadAll(): List<StoredConversation> {
-        val raw = prefs.getString(KEY_LIST, null) ?: return emptyList()
-        return runCatching {
-            val arr = JSONArray(raw)
-            (0 until arr.length()).mapNotNull { i ->
-                val o = arr.optJSONObject(i) ?: return@mapNotNull null
-                parse(o)
-            }
-        }.getOrDefault(emptyList())
-            .sortedWith(compareByDescending<StoredConversation> { it.pinned }.thenByDescending { it.updatedAt })
+    init {
+        migrateLegacyIfNeeded()
     }
 
-    /** 新建或更新一条会话 */
+    /** 全部会话：置顶优先（按置顶时间倒序），其余按更新时间倒序 */
+    fun loadAll(): List<StoredConversation> = runBlocking(Dispatchers.IO) {
+        val conversations = dao.loadConversations()
+        if (conversations.isEmpty()) return@runBlocking emptyList()
+        val messages = dao.loadMessages().groupBy { it.conversationId }
+        conversations.mapNotNull { conversation ->
+            conversation.toStored(messages[conversation.id].orEmpty())
+        }
+    }
+
+    /** 新建或更新一条会话（只重写这一条会话的消息） */
     fun upsert(conversation: StoredConversation) {
-        val list = loadAll().filterNot { it.id == conversation.id } + conversation
-        write(list)
+        runBlocking(Dispatchers.IO) {
+            dao.replaceConversation(
+                conversation.toEntity(),
+                conversation.messages.mapIndexed { index, message ->
+                    message.toEntity(conversation.id, index)
+                },
+            )
+        }
     }
 
     fun delete(id: String) {
-        write(loadAll().filterNot { it.id == id })
+        runBlocking(Dispatchers.IO) {
+            dao.deleteMessages(id)
+            dao.deleteConversation(id)
+        }
     }
 
     fun newId(): String = "c-" + UUID.randomUUID().toString().take(8)
 
-    private fun write(list: List<StoredConversation>) {
-        val arr = JSONArray()
-        list.sortedWith(compareByDescending<StoredConversation> { it.pinned }.thenByDescending { it.updatedAt })
-            .forEach { arr.put(toJson(it)) }
-        prefs.edit().putString(KEY_LIST, arr.toString()).apply()
+    /* ------------------------------ Entity 映射 ------------------------------ */
+
+    private fun StoredConversation.toEntity(): ConversationEntity = ConversationEntity(
+        id = id,
+        title = title,
+        updatedAt = updatedAt,
+        pinned = pinned,
+        pinnedAt = pinnedAt,
+        titleEdited = titleEdited,
+        activeChildJson = JSONObject().apply { activeChild.forEach { (k, v) -> put(k, v) } }.toString(),
+    )
+
+    private fun ConversationEntity.toStored(messages: List<MessageEntity>): StoredConversation {
+        val childMap = mutableMapOf<String, String>()
+        runCatching {
+            val json = JSONObject(activeChildJson)
+            json.keys().forEach { key -> childMap[key] = json.optString(key) }
+        }
+        return StoredConversation(
+            id = id,
+            title = title,
+            updatedAt = updatedAt,
+            messages = messages.sortedBy { it.orderIndex }.map { it.toUi() },
+            activeChild = childMap,
+            pinned = pinned,
+            pinnedAt = pinnedAt,
+            titleEdited = titleEdited,
+        )
     }
 
-    /* ------------------------------ JSON ------------------------------ */
+    private fun MessageUi.toEntity(conversationId: String, index: Int): MessageEntity = MessageEntity(
+        id = id,
+        conversationId = conversationId,
+        orderIndex = index,
+        parentId = parentId,
+        role = if (role == ChatRole.User) "user" else "assistant",
+        text = text,
+        reasoning = reasoning,
+        status = status.name,
+        finishReason = finishReason,
+        reasoningSeconds = reasoningSeconds,
+        reasoningExpanded = reasoningExpanded,
+        usagePrompt = usage?.prompt,
+        usageCompletion = usage?.completion,
+        usageReasoning = usage?.reasoning,
+        attachmentsJson = if (attachments.isEmpty()) null else attachmentsToJson(attachments).toString(),
+        sourcesJson = if (sources.isEmpty()) null else sourcesToJson(sources).toString(),
+        errorHint = errorHint,
+    )
 
-    private fun toJson(c: StoredConversation): JSONObject = JSONObject().apply {
-        put("id", c.id)
-        put("title", c.title)
-        put("updatedAt", c.updatedAt)
-        put("pinned", c.pinned)
-        put("pinnedAt", c.pinnedAt)
-        put("titleEdited", c.titleEdited)
-        put("messages", messagesToJson(c.messages))
-        put("activeChild", JSONObject().apply { c.activeChild.forEach { (k, v) -> put(k, v) } })
+    private fun MessageEntity.toUi(): MessageUi {
+        val sources = parseSources(sourcesJson?.let { runCatching { JSONArray(it) }.getOrNull() })
+        val attachments = parseAttachments(
+            attachmentsJson?.let { runCatching { JSONArray(it) }.getOrNull() },
+        )
+        return MessageUi(
+            id = id,
+            role = if (role == "user") ChatRole.User else ChatRole.Assistant,
+            text = text,
+            reasoning = reasoning,
+            status = runCatching { MessageStatus.valueOf(status) }
+                .getOrDefault(MessageStatus.Completed),
+            usage = usagePrompt?.let {
+                TokenUsage(
+                    prompt = it,
+                    completion = usageCompletion ?: 0,
+                    reasoning = usageReasoning ?: 0,
+                )
+            },
+            reasoningSeconds = reasoningSeconds,
+            reasoningExpanded = reasoningExpanded,
+            sourcesCount = sources.size,
+            sources = sources,
+            errorHint = errorHint,
+            finishReason = finishReason,
+            parentId = parentId,
+            attachments = attachments,
+        )
     }
 
-    private fun parse(o: JSONObject): StoredConversation? {
+    /* ------------------------------ 旧数据迁移 ------------------------------ */
+
+    private fun migrateLegacyIfNeeded() {
+        if (prefs.getBoolean(KEY_ROOM_MIGRATED, false)) return
+        val raw = prefs.getString(KEY_LIST, null)
+        if (raw.isNullOrBlank()) {
+            prefs.edit().putBoolean(KEY_ROOM_MIGRATED, true).apply()
+            return
+        }
+        val imported = runCatching {
+            val arr = JSONArray(raw)
+            val list = (0 until arr.length()).mapNotNull { i ->
+                arr.optJSONObject(i)?.let { parseLegacy(it) }
+            }
+            runBlocking(Dispatchers.IO) {
+                list.forEach { conversation ->
+                    dao.replaceConversation(
+                        conversation.toEntity(),
+                        conversation.messages.mapIndexed { index, message ->
+                            message.toEntity(conversation.id, index)
+                        },
+                    )
+                }
+            }
+            true
+        }.getOrDefault(false)
+        if (imported) prefs.edit().putBoolean(KEY_ROOM_MIGRATED, true).apply()
+    }
+
+    private fun parseLegacy(o: JSONObject): StoredConversation? {
         val id = o.optString("id")
         if (id.isBlank()) return null
-        val rawMessages = parseMessages(o.optJSONArray("messages"))
+        val rawMessages = parseLegacyMessages(o.optJSONArray("messages"))
         // 老格式没有 parentId：把线性列表串成链，保证树结构自洽
         val messages = if (rawMessages.any { it.parentId != null }) {
             rawMessages
@@ -134,7 +237,6 @@ class ConversationStore(context: Context) {
             obj.keys().forEach { k -> activeChild[k] = obj.optString(k) }
         }
         if (activeChild.isEmpty()) {
-            // 没存选中关系时，每个父节点选"最后创建"的子节点（即最新分支）
             messages.forEach { m -> activeChild[m.parentId ?: ""] = m.id }
         }
         return StoredConversation(
@@ -149,42 +251,7 @@ class ConversationStore(context: Context) {
         )
     }
 
-    private fun messagesToJson(messages: List<MessageUi>): JSONArray {
-        val arr = JSONArray()
-        messages.forEach { m ->
-            arr.put(
-                JSONObject().apply {
-                    put("id", m.id)
-                    put("role", if (m.role == ChatRole.User) "user" else "assistant")
-                    put("parentId", m.parentId ?: JSONObject.NULL)
-                    put("text", m.text)
-                    put("reasoning", m.reasoning)
-                    put("status", m.status.name)
-                    m.finishReason?.let { put("finishReason", it) }
-                    put("reasoningSeconds", m.reasoningSeconds)
-                    put("reasoningExpanded", m.reasoningExpanded)
-                    m.usage?.let {
-                        put(
-                            "usage",
-                            JSONObject()
-                                .put("prompt", it.prompt)
-                                .put("completion", it.completion)
-                                .put("reasoning", it.reasoning),
-                        )
-                    }
-                    if (m.attachments.isNotEmpty()) {
-                        put("attachments", attachmentsToJson(m.attachments))
-                    }
-                    if (m.sources.isNotEmpty()) {
-                        put("sources", sourcesToJson(m.sources))
-                    }
-                },
-            )
-        }
-        return arr
-    }
-
-    private fun parseMessages(arr: JSONArray?): List<MessageUi> {
+    private fun parseLegacyMessages(arr: JSONArray?): List<MessageUi> {
         if (arr == null) return emptyList()
         val list = mutableListOf<MessageUi>()
         for (i in 0 until arr.length()) {
@@ -217,6 +284,8 @@ class ConversationStore(context: Context) {
         return list
     }
 
+    /* ------------------------------ JSON 列 ------------------------------ */
+
     private fun attachmentsToJson(list: List<AttachmentUi>): JSONArray {
         val arr = JSONArray()
         list.forEach { a ->
@@ -241,6 +310,7 @@ class ConversationStore(context: Context) {
                     put("title", item.title)
                     put("url", item.url)
                     put("snippet", item.snippet)
+                    if (item.siteIcon.isNotBlank()) put("siteIcon", item.siteIcon)
                 },
             )
         }
@@ -255,7 +325,12 @@ class ConversationStore(context: Context) {
             val url = o.optString("url")
             val title = o.optString("title")
             if (url.isBlank() && title.isBlank()) continue
-            list += SourceItem(title = title.ifBlank { url }, url = url, snippet = o.optString("snippet"))
+            list += SourceItem(
+                title = title.ifBlank { url },
+                url = url,
+                snippet = o.optString("snippet"),
+                siteIcon = o.optString("siteIcon"),
+            )
         }
         return list
     }
@@ -278,5 +353,6 @@ class ConversationStore(context: Context) {
 
     private companion object {
         const val KEY_LIST = "conversations"
+        const val KEY_ROOM_MIGRATED = "room_migrated_v1"
     }
 }

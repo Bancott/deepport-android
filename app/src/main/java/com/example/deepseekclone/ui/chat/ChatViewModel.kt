@@ -42,7 +42,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     private val settings = SettingsStore.get(app)
     private val store = ConversationStore(app)
     private val repository = ChatRepository()
-    private val tts = TtsPlayer()
+    private val tts = TtsPlayer(app)
     private var currentId: String = ""
 
     /** 全部消息节点（插入顺序 = 创建顺序，兄弟节点顺序即分支顺序） */

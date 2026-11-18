@@ -13,6 +13,8 @@
 | Gradle | 8.14 |
 | AGP | 8.13.2 |
 | Kotlin | 2.1.20 |
+| KSP | 2.1.20-1.0.32（Room 代码生成） |
+| Room | 2.7.1 |
 | Compose BOM | 2025.04.01 |
 | compileSdk / targetSdk / minSdk | 35 / 35 / 26 |
 
@@ -61,6 +63,22 @@ app/src/main/java/com/example/deepseekclone/
 res/drawable/ic_deepseek_whale.xml      # 鲸鱼矢量 logo（evenOdd，可 tint）
 res/drawable/ic_launcher_foreground.xml # 启动图标前景
 res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
+res/xml/file_paths.xml                  # 分享卡片 FileProvider 路径
+```
+
+数据层与分享：
+
+```
+data/
+├── ChatDatabase.kt        # Room 实体 / DAO / 数据库（conversations + messages）
+├── ConversationStore.kt   # Room 会话存储；首次启动把旧 SharedPreferences JSON 迁进 Room
+├── DeepSeekApi.kt         # Anthropic 兼容对话 / files / ASR / TTS（含流式 PCM）
+├── ChatRepository.kt      # 协议事件 → StreamEvent
+├── TtsPlayer.kt           # AudioTrack 流式朗读 + 音频焦点
+└── ...
+ui/share/ShareCard.kt      # 分享图片卡片（Canvas 渲染 PNG + FileProvider）
+ui/common/SiteIcons.kt     # 来源站点图标：内存 + 磁盘缓存，失败回退首字母徽标
+tools/icons/               # 图标 SVG 源（chat-demo / traced）+ build_vectors.py
 ```
 
 ---
@@ -93,8 +111,9 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 | `ic_volume_speaker.xml` | 截图实测重绘 | 顶栏自动朗读开关的喇叭（开/关斜线） |
 | `ic_deepseek_whale.xml` | 官方位图轮廓矢量化 | 鲸鱼 logo（nonZero + 反向孔洞） |
 
-> 前 9 个图标由 `tools/import_chatdemo_icons.py` 从 chat-demo 的 `src/components/base/icons.tsx` 直接抽 `path` 生成，
-> 几何与官方 Web demo 一致；语音输入、分享、喇叭在 chat-demo 里没有对应图标，继续按 3x 截图描。
+> 前 9 个图标源文件在 `tools/icons/chat-demo/`（从 chat-demo 的 `src/components/base/icons.tsx` 原样抽出），
+> 由 `tools/icons/build_vectors.py` 生成到 `res/drawable`；语音输入、分享、喇叭在 chat-demo 里没有对应图标，
+> 源文件放 `tools/icons/traced/`，继续按 3x 截图描。`res/drawable` 不能建子目录，所以源文件与映射统一在 `tools/icons` 管理。
 > 鲸鱼 logo 第一版用了第三方单路径 + evenOdd，在 Android 上 PathParser 渲染成破碎轮廓；
 > 现已改为从官方 PNG 追踪轮廓生成的多环路径，白圈与眼部孔洞稳定。
 
@@ -103,14 +122,11 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 `adb shell wm size` → 1200×2670，`wm density` → 480，即 **400×890dp**，与截图归一假设一致。
 真机逐项比对后修正：问候语 22sp → 20sp；logo 32dp → 44dp；chip 内边距 10 → 13dp、图标 18 → 14dp；
 加号/麦克风 28dp → 24dp；按钮间距 8 → 4dp；输入卡内边距 16/14 → 12·10/14·10；免责声明去掉 navbar 内边距。
-剩余差异：深度思考图标花瓣弧度约 90% 接近；地球图标暂用 Material `Language`（15dp）。
+图标已换成 chat-demo 官方 path，深度思考/地球的形状差异消除；只剩语音输入、分享两个手绘图标与官方存在光学尺寸微差。
 
 ## 5. 未实现（后续迭代）
 
-1. 分享还没有做官方那种图片卡片；消息本体不能直接拖选（走「选择文本」弹窗）
-2. 数据层仍是 JSON + SharedPreferences，待换 Room
-3. 来源列表的真实站点图标（现在用域名首字母 + 按域名散列配色）
-4. 朗读暂不处理音频焦点（后台播放/与视频 App 混音未接管）
+1. 消息本体还不能直接拖选（只能长按 →「选择文本」弹窗）
 
 > 对话协议已换成官方 chat-demo 同款 Anthropic 兼容接口：
 > `POST {origin}/anthropic/v1/messages`，请求体带 `system`（助手身份说明）、`thinking:{type}`、
@@ -138,13 +154,17 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 - **朗读**：动作条播放按钮 → `/v1/tools/tts` 合成裸 PCM（24kHz / 单声道 / 16bit），用 `AudioTrack` 流式播放：收到首块就出声，边下边写；播放中按钮换成四根波形条（Loading 呼吸、Playing 波动），再点一次立刻静音停止；正常读完会等缓冲播完再释放音轨，尾音不截断。顶栏喇叭打开后新回答生成完自动读；朗读前把 Markdown 洗成纯文本。失败（未填 Key / 合成报错）用 toast 提示。
 - **朗读音色**：设置 → 语音 → 朗读音色，底部弹层横向切卡（海星 stella / 暗潮 tide），确认后写入本地，下一次朗读生效（官方接口目前只开放这两档）。
 - **设置清理**：删掉已作废的「语音识别（可选）」三项（ASR 现在与对话共用同一个 Key，走 `/v1/tools/asr`），模型设置页只留 API Key / Base URL / 模型列表，并补一句两个语音接口的说明；系统 TTS 相关的 Manifest `queries` 一并移除。
+- **数据层（Room）**：`conversations` 存元数据与 `activeChild`，`messages` 存消息节点（附件/来源以 JSON 列保存），每条会话独立事务写入，不再整份 JSON 重写；首次启动把旧 SharedPreferences 数据一次性迁进 `ds_chat.db`（`room_migrated_v1` 标记，保留旧 JSON 作备份）。
+- **分享图片卡片**：动作条「分享」→ Canvas 渲染 1080 宽 PNG（深色渐变 + 鲸鱼标 + 标题 + 正文纯文本 + 免责声明），写到 `cache/share` 后通过 `FileProvider` 分享；Markdown 会先洗成纯文本。
+- **来源站点图标**：用接口 `site_icon`（如 `cdn.deepseek.com/site-icons/weather.com.cn`）加载真实站点图标，内存 LRU + 磁盘缓存（`cache/site_icons`，离线仍可用），加载失败才回退首字母徽标。
+- **朗读音频焦点**：播放前申请 `AUDIOFOCUS_GAIN_TRANSIENT`，来电/别的 App 播放时自动停止，可 duck 时降到 20% 音量；停止/播完释放焦点。
 - **消息编辑**：用户消息长按 → 编辑（多行弹窗），确认后在同一父节点下新建用户节点并重新回答，原答案保留在 `‹n/m›` 分支里。
 - **智能搜索**：`智能搜索` 开关注入 `tools[deepseek_web_search]`（`deepseek_read_url` 常开）；来源从 `web_search_tool_result` 与正文 `citations_delta` 合并去重。
 - **会话标题**：首轮请求带 `title:{enabled:true}`，服务端从提问生成标题经 `message_delta` 下发后回填；用户手动重命名过就不再请求/覆盖。
 - **协议真机验证**（2026-11-18，小米 14 + 真实 Key）：服务端标题、深度思考、智能搜索、23 个网页来源与来源 Sheet 全部跑通；files API 的图片/文档块也用同一 Key 验证过（`image` 200、`document` 200）。
 - **朗读真机验证**（2026-11-18）：605 字回答合成 4.7MB PCM（约 98 秒），边收边播完整播完并由 `playbackHeadPosition` 确认播完再释放；短回答自然结束、播放中再点立即停止都跑通；「暗潮」音色同样可用。
 - **选择文本**：长按菜单 → 选择文本，弹出可自由选段的弹窗（SelectionContainer），底部有「全选并复制」。
-- **来源列表**：回答下方「N 个网页」可点，底部 Sheet 列出站点徽标（域名首字母 + 按域名散列配色，离线也有稳定图标）/ 标题 / 摘要，点条目在 App 内置 WebView 里打开（标题「来源」）。
+- **来源列表**：回答下方「N 个网页」可点，底部 Sheet 列出站点图标（`site_icon` 真实图标，失败回退首字母徽标）/ 标题 / 摘要，点条目在 App 内置 WebView 里打开（标题「来源」）。
 - **输出额度**：新协议不再传 `max_tokens`，由服务端决定上限；思考过程也算输出额度。`stop_reason=max_tokens` 映射成 `length`，回答下方提示被截断，正文为空时也会提示"这次没有生成正文，可点重新生成再试"。
 
 
@@ -154,6 +174,6 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 ## 8. 设计口径
 
 - 视觉尺寸以 3.0x（≈400×890dp）归一，真机需 `adb shell wm density` 复核。
-- 图标：Material 图标库只用于「地球 / 键盘 / 关闭 / 音量」等通用项；品牌相关图标全部 Canvas 自绘，避免形状偏差。
+- 图标：品牌相关图标来自 `tools/icons/`（chat-demo 官方 SVG + 手绘溯源），生成 `res/drawable` 后统一用 `SvgIcon` tint；Material 图标库只用于关闭/键盘等通用项。
 - 任何颜色都不得在页面里硬编码，一律走 `DsTheme.colors`。
 

@@ -48,6 +48,8 @@ data class SourceItem(
     val title: String,
     val url: String,
     val snippet: String = "",
+    /** 接口返回的站点图标 URL（可能为空，回退到首字母徽标） */
+    val siteIcon: String = "",
 ) {
     /** 用于列表上显示的站点名 */
     val host: String
