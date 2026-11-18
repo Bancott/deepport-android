@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import com.example.deepseekclone.R
 
@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -204,13 +205,21 @@ private fun AssistantMessage(
     val colors = DsTheme.colors
     val streaming = message.status == MessageStatus.Streaming || message.status == MessageStatus.Reasoning
     val menuExpanded = remember { mutableStateOf(false) }
+    // 消息内直接拖选：从长按菜单进「选择文本」后开启，此时关掉父级长按，避免菜单抢手势
+    var selectingText by remember(message.id) { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 24.dp, end = 24.dp, top = 16.dp)
-            .combinedClickable(
-                onClick = {},
-                onLongClick = { menuExpanded.value = true },
+            .then(
+                if (selectingText) {
+                    Modifier
+                } else {
+                    Modifier.combinedClickable(
+                        onClick = {},
+                        onLongClick = { menuExpanded.value = true },
+                    )
+                },
             ),
     ) {
         MessageLongPressBox(
@@ -218,6 +227,7 @@ private fun AssistantMessage(
             expanded = menuExpanded.value,
             onExpandedChange = { menuExpanded.value = it },
             onRegenerate = onRegenerate,
+            onSelectText = { selectingText = true },
         ) {}
         if (message.reasoning.isNotBlank() || message.status == MessageStatus.Reasoning) {
             ReasoningSection(
@@ -234,10 +244,43 @@ private fun AssistantMessage(
             MessageStatus.Failed -> ErrorTurn(hint = message.errorHint ?: "请检查网络后重试", onRetry = onRetry)
             else -> {
                 if (message.text.isNotEmpty()) {
-                    MarkdownText(
-                        markdown = message.text,
-                        color = colors.textPrimary,
-                    )
+                    if (selectingText) {
+                        SelectionContainer {
+                            MarkdownText(
+                                markdown = message.text,
+                                color = colors.textPrimary,
+                            )
+                        }
+                    } else {
+                        MarkdownText(
+                            markdown = message.text,
+                            color = colors.textPrimary,
+                        )
+                    }
+                }
+                if (selectingText) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "长按文字拖动选择，系统菜单可复制",
+                            style = DsText.caption.copy(fontSize = 12.sp),
+                            color = colors.textSecondary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "完成",
+                            style = DsText.label.copy(fontSize = 14.sp),
+                            color = colors.primary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { selectingText = false }
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
                 }
             }
         }
