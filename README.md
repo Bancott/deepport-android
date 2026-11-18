@@ -61,8 +61,9 @@ app/src/main/java/com/example/deepseekclone/
 
 ```
 res/drawable/ic_deepseek_whale.xml      # 鲸鱼矢量 logo（evenOdd，可 tint）
-res/drawable/ic_launcher_foreground.xml # 启动图标前景
+res/drawable/ic_launcher_foreground.xml # 启动图标前景：白鲸（与鲸鱼 logo 同一份路径）
 res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
+res/values/colors.xml                   # ic_launcher_background = #0F0F0F（深色底）
 res/xml/file_paths.xml                  # 分享卡片 FileProvider 路径
 ```
 
@@ -89,6 +90,7 @@ tools/icons/               # 图标 SVG 源（chat-demo / traced）+ build_vecto
 - 顶栏：两横线菜单 + 左对齐标题（空态隐藏标题，与官方一致）+ 朗读开关 + 新建对话（气泡加号）。
 - 空态：鲸鱼 44dp + 问候语 20sp。
 - 输入卡：1dp 描边、28dp 圆角、376dp 宽、左右 12/10dp 内边距；chip 32dp / 图标 14dp / 内边距 13dp；加号与麦克风 24.3dp、间距 4dp；语音模式「按住说话」；转写中；转写回填提示条。
+- **应用图标**：自适应图标，深色底（`#0F0F0F`）+ 白色鲸鱼（与 App 内 logo 共用同一份路径）；monochrome 也是这只鲸鱼。
 - 无障碍：所有图标按钮带 `contentDescription`，触控区 ≥40dp。
 - Preview：浅色空态 / 深色空态 / 深色输入中 / 浅色语音模式。
 
