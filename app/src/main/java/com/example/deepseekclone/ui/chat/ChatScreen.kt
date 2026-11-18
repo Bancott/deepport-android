@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import androidx.compose.ui.draw.rotate
 
@@ -130,7 +130,7 @@ fun ChatScreen(
                 ) {
                     // 顶栏用用户提供的「声音」SVG；关闭朗读时叠一条斜线
                     Box(contentAlignment = Alignment.Center) {
-                        SvgIcon(R.drawable.ic_action_volume, tint = colors.textPrimary, size = 22.dp)
+                        SvgIcon(R.drawable.ic_volume_speaker, tint = colors.textPrimary, size = 22.dp)
                         if (!state.isSpeechOutputOn) {
                             Box(
                                 Modifier
@@ -146,7 +146,7 @@ fun ChatScreen(
                     contentDescription = "新建对话",
                     onClick = onNewChatClick,
                 ) {
-                    SvgIcon(R.drawable.ic_action_new_chat, tint = colors.textPrimary, size = 19.dp)
+                    SvgIcon(R.drawable.ic_action_new_chat, tint = colors.textPrimary, size = 21.dp)
                 }
             }
 

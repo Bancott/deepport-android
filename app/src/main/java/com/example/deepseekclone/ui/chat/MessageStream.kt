@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import com.example.deepseekclone.R
 
@@ -433,7 +433,7 @@ private fun SourcesPill(count: Int, onClick: () -> Unit) {
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GlobeGlyph(color = colors.textSecondary, iconSize = 16.dp)
+        GlobeGlyph(color = colors.textSecondary, iconSize = 13.7.dp)
         Spacer(Modifier.width(6.dp))
         Text(
             text = "$count 个网页",
@@ -502,7 +502,7 @@ private fun MessageActionBar(
         }
 
         ActionIcon(
-            icon = { tint -> SvgIcon(R.drawable.ic_action_copy, tint = tint, size = 23.dp) },
+            icon = { tint -> SvgIcon(R.drawable.ic_action_copy, tint = tint, size = 22.dp) },
             label = "复制",
             onClick = onCopy,
         )
@@ -511,7 +511,7 @@ private fun MessageActionBar(
                 if (readingState != ReadAloudState.Idle) {
                     ReadingBars(state = readingState, color = tint)
                 } else {
-                    SvgIcon(R.drawable.ic_action_volume, tint = tint, size = 21.dp)
+                    SvgIcon(R.drawable.ic_action_volume, tint = tint, size = 19.dp)
                 }
             },
             label = if (readingState == ReadAloudState.Idle) "朗读" else "停止朗读",
@@ -535,7 +535,7 @@ private fun MessageActionBar(
         // 重试右缘对齐用户气泡右侧（16dp）
         Box(Modifier.offset(x = 25.dp)) {
             ActionIcon(
-                icon = { tint -> SvgIcon(R.drawable.ic_action_refresh, tint = tint, size = 21.dp) },
+                icon = { tint -> SvgIcon(R.drawable.ic_action_refresh, tint = tint, size = 20.dp) },
                 label = "重新生成",
                 onClick = onRegenerate,
             )

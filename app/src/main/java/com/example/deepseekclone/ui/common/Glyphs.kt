@@ -2,17 +2,15 @@ package com.example.deepseekclone.ui.common
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
@@ -20,12 +18,11 @@ import androidx.compose.ui.unit.dp
 import com.example.deepseekclone.R
 
 /**
- * 官方几个"非 Material"图标，已按截图实测重绘为 VectorDrawable（res/drawable）：
- * - ic_menu_lines：上长下短两条方头线，18 / 10.3 × 1.8dp
- * - ic_plus_circle：Ø24.3 圈 + 方头十字
- * - ic_voice：Ø24.3 圈 + 圆点 + 两道声波弧（r 6 / 9.3）
- * - ic_deep_think：14dp 原子（外圈 + ±45° 双轨道 + 中心点）
- * - ic_new_chat：气泡 + 加号
+ * 图标分两类：
+ * - 官方 chat-demo `icons.tsx` 里的 SVG path 原样转成的 VectorDrawable（菜单 / 深度思考 / 地球 /
+ *   新对话 / 复制 / 重新生成 / 朗读 / 发送 / 停止），见 `_audit/import_icons.py`；
+ * - 官方安卓 App 截图里才有、chat-demo 没有的（语音输入的圆环声波、分享箭头、加号圈、键盘、鲸鱼），
+ *   继续用按 3x 截图描的矢量。
  * 这里只做包装，保证 tint 与内容语义统一。
  */
 @Composable
@@ -80,7 +77,7 @@ fun NewChatGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 25.
 
 /** 智能搜索：用户提供的互联网（地球）矢量，1024 viewBox，图形约占 858/1024 */
 @Composable
-fun GlobeGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 18.3.dp) {
+fun GlobeGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 15.7.dp) {
     Icon(
         painter = painterResource(R.drawable.ic_globe),
         contentDescription = null,
@@ -89,48 +86,21 @@ fun GlobeGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 18.3.
     )
 }
 
-/** 发送：向上箭头（Canvas 绘制，箭头比例与官方一致） */
+/** 发送：官方 chat-demo 的向上箭头 */
 @Composable
 fun SendArrowGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 20.dp) {
-    Canvas(modifier = modifier.size(iconSize)) {
-        val s = size.minDimension
-        val stroke = s * 0.11f
-        val top = Offset(center.x, s * 0.20f)
-        val bottom = Offset(center.x, s * 0.82f)
-        drawLine(color, bottom, top, strokeWidth = stroke, cap = StrokeCap.Round)
-        drawLine(
-            color,
-            Offset(center.x - s * 0.27f, s * 0.45f),
-            top,
-            strokeWidth = stroke,
-            cap = StrokeCap.Round,
-        )
-        drawLine(
-            color,
-            Offset(center.x + s * 0.27f, s * 0.45f),
-            top,
-            strokeWidth = stroke,
-            cap = StrokeCap.Round,
-        )
-    }
+    SvgIcon(R.drawable.ic_send, tint = color, modifier = modifier, size = iconSize)
 }
 
-/** 生成中：圆角方块（停止） */
+/** 生成中：官方 chat-demo 的圆角方块（停止） */
 @Composable
 fun StopSquareGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 12.dp) {
-    Canvas(modifier = modifier.size(iconSize)) {
-        val s = size.minDimension
-        drawRoundRect(
-            color = color,
-            size = Size(s, s),
-            cornerRadius = CornerRadius(s * 0.26f, s * 0.26f),
-        )
-    }
+    SvgIcon(R.drawable.ic_stop, tint = color, modifier = modifier, size = iconSize)
 }
 
 
 /**
- * 上传/发送：蓝色实心圆 + 白色加粗向上箭头（有文字时替换语音按钮，尺寸与麦克风一致 24.6dp）
+ * 发送：蓝色实心圆 + 官方 chat-demo 的白色向上箭头（有文字时替换语音按钮，尺寸与麦克风一致 24.6dp）
  */
 @Composable
 fun SendCircleGlyph(
@@ -139,19 +109,11 @@ fun SendCircleGlyph(
     modifier: Modifier = Modifier,
     iconSize: Dp = 24.6.dp,
 ) {
-    Canvas(modifier = modifier.size(iconSize)) {
-        val s = size.minDimension
-        drawCircle(color = background, radius = s / 2f)
-
-        val stroke = s * 0.108f
-        val cx = center.x
-        val topY = s * 0.285f
-        val bottomY = s * 0.715f
-        val headX = s * 0.135f
-        val headY = s * 0.415f
-        drawLine(arrowColor, Offset(cx, bottomY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
-        drawLine(arrowColor, Offset(cx - headX, headY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
-        drawLine(arrowColor, Offset(cx + headX, headY), Offset(cx, topY), strokeWidth = stroke, cap = StrokeCap.Round)
+    Box(modifier = modifier.size(iconSize), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            drawCircle(color = background, radius = size.minDimension / 2f)
+        }
+        SvgIcon(R.drawable.ic_send, tint = arrowColor, size = iconSize * 0.46f)
     }
 }
 

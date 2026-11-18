@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import com.example.deepseekclone.R
 
@@ -305,7 +305,7 @@ private fun ActionRow(
             label = "智能搜索",
             selected = state.smartSearch,
             onClick = onToggleSmartSearch,
-        ) { tint -> GlobeGlyph(color = tint, iconSize = 18.3.dp) }
+        ) { tint -> GlobeGlyph(color = tint, iconSize = 15.7.dp) }
 
         Spacer(Modifier.weight(1f))
 
@@ -378,9 +378,9 @@ private fun SendOrStopButton(
         contentAlignment = Alignment.Center,
     ) {
         if (generating) {
-            StopSquareGlyph(color = Color.White, iconSize = 9.dp)
+            StopSquareGlyph(color = Color.White, iconSize = 12.dp)
         } else {
-            SendArrowGlyph(color = Color.White, iconSize = 13.dp)
+            SendArrowGlyph(color = Color.White, iconSize = 9.dp)
         }
     }
 }

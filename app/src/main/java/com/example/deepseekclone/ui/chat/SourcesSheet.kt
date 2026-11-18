@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -71,7 +71,7 @@ fun SourcesSheet(
                     .padding(start = 20.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                GlobeGlyph(color = colors.textSecondary, iconSize = 17.dp)
+                GlobeGlyph(color = colors.textSecondary, iconSize = 14.6.dp)
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = "${sources.size} 个网页",

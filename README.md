@@ -74,17 +74,27 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 - 无障碍：所有图标按钮带 `contentDescription`，触控区 ≥40dp。
 - Preview：浅色空态 / 深色空态 / 深色输入中 / 浅色语音模式。
 
-### 自绘矢量图标（实测重绘，全部在 `res/drawable`）
+### 矢量图标（`res/drawable`）
 
-| 文件 | 尺寸/描边 | 说明 |
+| 文件 | 来源 | 说明 |
 |---|---|---|
-| `ic_menu_lines.xml` | 18 / 10.3 dp 长，1.8dp 粗，方头 | 上长下短两横线（非 Material 三横线） |
-| `ic_plus_circle.xml` | Ø24.3，描边 1.9 | 输入卡加号（方头十字 10.6dp） |
-| `ic_voice.xml` | Ø24.3，描边 1.9 | 圆圈 + Ø2.5 圆点 + 两道弧（r6 / r9） |
-| `ic_deep_think.xml` | 14dp，描边 1.55 | ±45° 双椭圆轨道 + 中心点 |
-| `ic_new_chat.xml` | Ø18.4，描边 1.6 | 气泡 + 加号（顶栏新建对话） |
-| `ic_deepseek_whale.xml` | 24 viewBox | 鲸鱼 logo，由官方位图轮廓矢量化（nonZero + 反向孔洞） |
+| `ic_menu_lines.xml` | chat-demo `IconMenuOutline20` | 上长下短两横线（非 Material 三横线） |
+| `ic_deep_think.xml` | chat-demo `IconThinkOutline14` | 14dp 原子轨道 + 中心点 |
+| `ic_globe.xml` | chat-demo `IconGlobeLanguageOutline14` | 14dp 地球（智能搜索 / 来源） |
+| `ic_action_new_chat.xml` | chat-demo `IconNewChatOutline20` | 顶栏新建对话（气泡 + 加号） |
+| `ic_action_copy.xml` | chat-demo `IconCopyOutline16` | 复制 |
+| `ic_action_refresh.xml` | chat-demo `IconRefreshOutline16` | 重新生成 / 失败重试 |
+| `ic_action_volume.xml` | chat-demo `IconPlayMediaOutline16` | 朗读（动作条播放按钮） |
+| `ic_send.xml` | chat-demo `IconSendOutline16` | 发送箭头 |
+| `ic_stop.xml` | chat-demo `IconStopFill16` | 生成中停止的圆角方块 |
+| `ic_plus_circle.xml` | 截图实测重绘 | 输入卡加号（方头十字 10.6dp） |
+| `ic_voice.xml` | 截图实测重绘 | 语音输入：圆圈 + 圆点 + 两道弧（chat-demo 没有同款） |
+| `ic_action_share.xml` | 用户素材描矢量 | 分享箭头（chat-demo 没有分享按钮） |
+| `ic_volume_speaker.xml` | 截图实测重绘 | 顶栏自动朗读开关的喇叭（开/关斜线） |
+| `ic_deepseek_whale.xml` | 官方位图轮廓矢量化 | 鲸鱼 logo（nonZero + 反向孔洞） |
 
+> 前 9 个图标由 `tools/import_chatdemo_icons.py` 从 chat-demo 的 `src/components/base/icons.tsx` 直接抽 `path` 生成，
+> 几何与官方 Web demo 一致；语音输入、分享、喇叭在 chat-demo 里没有对应图标，继续按 3x 截图描。
 > 鲸鱼 logo 第一版用了第三方单路径 + evenOdd，在 Android 上 PathParser 渲染成破碎轮廓；
 > 现已改为从官方 PNG 追踪轮廓生成的多环路径，白圈与眼部孔洞稳定。
 
@@ -125,7 +135,7 @@ res/mipmap-anydpi-v26/ic_launcher.xml   # 自适应图标
 
 ## 7. 朗读 / 消息编辑 / 智能搜索 / 来源列表
 
-- **朗读**：动作条喇叭 → `/v1/tools/tts` 合成裸 PCM（24kHz / 单声道 / 16bit），用 `AudioTrack` 流式播放：收到首块就出声，边下边写；播放中喇叭换成四根波形条（Loading 呼吸、Playing 波动），再点一次立刻静音停止；正常读完会等缓冲播完再释放音轨，尾音不截断。顶栏喇叭打开后新回答生成完自动读；朗读前把 Markdown 洗成纯文本。失败（未填 Key / 合成报错）用 toast 提示。
+- **朗读**：动作条播放按钮 → `/v1/tools/tts` 合成裸 PCM（24kHz / 单声道 / 16bit），用 `AudioTrack` 流式播放：收到首块就出声，边下边写；播放中按钮换成四根波形条（Loading 呼吸、Playing 波动），再点一次立刻静音停止；正常读完会等缓冲播完再释放音轨，尾音不截断。顶栏喇叭打开后新回答生成完自动读；朗读前把 Markdown 洗成纯文本。失败（未填 Key / 合成报错）用 toast 提示。
 - **朗读音色**：设置 → 语音 → 朗读音色，底部弹层横向切卡（海星 stella / 暗潮 tide），确认后写入本地，下一次朗读生效（官方接口目前只开放这两档）。
 - **设置清理**：删掉已作废的「语音识别（可选）」三项（ASR 现在与对话共用同一个 Key，走 `/v1/tools/asr`），模型设置页只留 API Key / Base URL / 模型列表，并补一句两个语音接口的说明；系统 TTS 相关的 Manifest `queries` 一并移除。
 - **消息编辑**：用户消息长按 → 编辑（多行弹窗），确认后在同一父节点下新建用户节点并重新回答，原答案保留在 `‹n/m›` 分支里。
