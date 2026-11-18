@@ -143,6 +143,11 @@ class TtsPlayer(context: Context) {
     private suspend fun consume(stream: Flow<ByteArray>, my: Int) {
         var audio: AudioTrack? = null
         var writtenBytes = 0L
+        // 16bit PCM 写 AudioTrack 必须以「帧」（2 字节）为单位，而 HTTP 分块长度是任意的。
+        // 原实现把奇数长度的块直接交给 write()，AudioTrack 返回 ERROR_BAD_VALUE(-2)，
+        // 被 `if (written < 0) break` 静默吞掉 → 剩下的数据全丢，且后续字节流整体错位半个采样，
+        // 听感就是持续的大电流声。这里留一个 1 字节的进位缓冲，保证每次写进去的都是偶数长度。
+        var carry: ByteArray? = null
         try {
             stream.collect { chunk ->
                 if (my != token) return@collect
@@ -150,6 +155,15 @@ class TtsPlayer(context: Context) {
                     // 服务端合成失败时可能回一段 JSON 错误而不是 PCM，别把 JSON 当噪音播出去
                     jsonError(chunk)?.let { throw IllegalStateException(it) }
                 }
+                val data = carry?.let { c ->
+                    ByteArray(c.size + chunk.size).also {
+                        c.copyInto(it)
+                        chunk.copyInto(it, c.size)
+                    }
+                } ?: chunk
+                val evenSize = data.size and 1.inv()
+                carry = if (evenSize < data.size) byteArrayOf(data[evenSize]) else null
+
                 val track = audio ?: newTrack().also {
                     audio = it
                     activeTrack = it
@@ -158,9 +172,12 @@ class TtsPlayer(context: Context) {
                 }
                 var offset = 0
                 var idleWrites = 0
-                while (offset < chunk.size && my == token) {
-                    val written = track.write(chunk, offset, chunk.size - offset)
-                    if (written < 0) break
+                while (offset < evenSize && my == token) {
+                    val written = track.write(data, offset, evenSize - offset)
+                    if (written < 0) {
+                        Log.w("TtsPlayer", "write failed: $written at $offset/${data.size}")
+                        break
+                    }
                     if (written == 0) {
                         // 缓冲区满时 blocking write 偶发返回 0，短暂等待后重试，避免丢帧
                         if (++idleWrites > 50) break

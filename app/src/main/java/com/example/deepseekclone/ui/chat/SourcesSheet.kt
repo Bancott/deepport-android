@@ -37,7 +37,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.deepseekclone.R
 import com.example.deepseekclone.ui.common.GlobeGlyph
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.common.rememberSiteIcon
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
@@ -90,11 +92,10 @@ fun SourcesSheet(
                         .clickable(onClick = onDismiss),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = "关闭",
+                    SvgIcon(
+                        R.drawable.ic_close_outline_20,
                         tint = colors.textSecondary,
-                        modifier = Modifier.size(18.dp),
+                        size = 18.dp,
                     )
                 }
             }

@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -96,7 +97,7 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(
                     LocalDensity provides Density(density.density, scale),
                 ) {
-                    App()
+                    App(isDark = dark)
                 }
             }
         }
@@ -105,15 +106,48 @@ class MainActivity : ComponentActivity() {
 
 private enum class Screen { Chat, Search, Settings, Model, Account, Data, Personalization, FontSize }
 
+/**
+ * 导航栈的一层。抽屉展开状态记在这一层上：
+ * 从打开的抽屉进设置，会话页那层仍然是 open，返回时抽屉自然恢复，不会"跳一步"。
+ */
+private data class NavEntry(val screen: Screen, val drawerOpen: Boolean = false)
+
 @Composable
-private fun App() {
+private fun App(isDark: Boolean) {
     val context = LocalContext.current
     val store = remember { SettingsStore.get(context) }
     val vm: ChatViewModel = viewModel()
     val chat by vm.state.collectAsStateWithLifecycle()
 
-    var screen by remember { mutableStateOf(Screen.Chat) }
-    var drawerOpen by remember { mutableStateOf(false) }
+    // 导航栈：栈底永远是会话页，每进一层 push，返回就 pop 一层。
+    // 抽屉状态挂在栈顶元素上，所以从抽屉进设置再返回时，抽屉会自动回到展开态。
+    val navStack = remember { mutableStateListOf(NavEntry(Screen.Chat)) }
+    val nav = navStack.last()
+    val screen = nav.screen
+    val drawerOpen = nav.drawerOpen
+
+    fun navPush(target: Screen) {
+        if (navStack.last().screen == target) return
+        navStack.add(NavEntry(target))
+    }
+
+    /** 返回一层；已经在栈底时返回 false，把返回键交还给系统 */
+    fun navBack(): Boolean {
+        if (navStack.size <= 1) return false
+        navStack.removeAt(navStack.lastIndex)
+        return true
+    }
+
+    /** 回到会话页并清掉中间层，用于点会话项 / 搜索结果 / 新建对话 */
+    fun navResetToChat(drawerOpen: Boolean = false) {
+        while (navStack.size > 1) navStack.removeAt(navStack.lastIndex)
+        navStack[0] = NavEntry(Screen.Chat, drawerOpen)
+    }
+
+    /** 只改栈顶的抽屉状态；不能动更下层的记录，否则返回时还原不回来 */
+    fun setDrawerOpen(open: Boolean) {
+        navStack[navStack.lastIndex] = navStack.last().copy(drawerOpen = open)
+    }
     var drawer by remember { mutableStateOf(DrawerUiState()) }
     var renameTarget by remember { mutableStateOf<ConversationUi?>(null) }
     var deleteTarget by remember { mutableStateOf<ConversationUi?>(null) }
@@ -156,21 +190,35 @@ private fun App() {
         onDenied = { vm.failTranscription("需要麦克风权限才能使用语音输入") },
     )
 
-    // 重命名 / 置顶 / 删除之后都要从存储里重算分组，否则抽屉还显示旧标题
+    // 重命名 / 置顶 / 删除之后都要从存储里重算分组，否则抽屉还显示旧标题。
+    // 必须切到 IO：conversationGroups() 里面是 runBlocking 的 Room 查询，
+    // 直接在组合里调用会把主线程钉住，抽屉动画首帧必掉帧。
     fun refreshDrawer() {
-        drawer = drawer.copy(groups = vm.conversationGroups())
-    }
-
-    // 返回栈：模型设置 → 设置 → 会话；抽屉打开时先关抽屉。只有主界面才真正退出。
-    BackHandler(enabled = screen != Screen.Chat) {
-        screen = when (screen) {
-            Screen.Model, Screen.Account, Screen.Data, Screen.Personalization -> Screen.Settings
-            Screen.Settings -> Screen.Chat
-            else -> Screen.Chat
+        scope.launch {
+            val groups = withContext(Dispatchers.IO) { vm.conversationGroups() }
+            // 顺带把"当前会话"带上，抽屉里要给它蓝色高亮；还有登录后的昵称/头像
+            drawer = drawer.copy(
+                groups = groups,
+                currentId = vm.currentConversationId(),
+                userName = vm.userName(),
+                avatarUrl = vm.userAvatar(),
+            )
         }
     }
-    BackHandler(enabled = screen == Screen.Chat && drawerOpen) {
-        drawerOpen = false
+
+    // 启动时先备好列表，抽屉打开就能直接出内容，不用等一次查询
+    LaunchedEffect(Unit) { refreshDrawer() }
+
+    // 返回优先级（同一个 Dispatcher 上后注册的先响应）：网页 → 上一页 → 关抽屉 → 系统退出。
+    // 网页层必须单独兜住，否则它会跳过设置直接落在会话页，再按一次就退出了。
+    BackHandler(enabled = webTarget == null && navStack.size > 1) {
+        navBack()
+    }
+    BackHandler(enabled = webTarget == null && navStack.size == 1 && drawerOpen) {
+        setDrawerOpen(false)
+    }
+    BackHandler(enabled = webTarget != null) {
+        webTarget = null
     }
 
     if (showAppearance) {
@@ -178,6 +226,7 @@ private fun App() {
             title = "外观",
             options = AppearanceOptions,
             selected = store.themeMode,
+            darkTheme = isDark,
             onSelect = {
                 store.updateThemeMode(it)
                 showAppearance = false
@@ -190,6 +239,7 @@ private fun App() {
             title = "语言",
             options = LanguageOptions,
             selected = "zh-CN",
+            darkTheme = isDark,
             onSelect = { showLanguage = false },
             onDismiss = { showLanguage = false },
         )
@@ -244,6 +294,7 @@ private fun App() {
             url = url,
             title = title,
             onBack = { webTarget = null },
+            onUserInfo = { n, a -> vm.updateUserInfo(n, a) },
         )
         return
     }
@@ -266,43 +317,82 @@ private fun App() {
 
     when (screen) {
         Screen.Search -> SearchScreen(
-            onBack = { screen = Screen.Chat },
+            onBack = { navBack() },
             onOpenConversation = { id ->
                 vm.open(id)
-                screen = Screen.Chat
+                navResetToChat()
             },
             search = { vm.search(it) },
         )
 
         Screen.FontSize -> FontSizeScreen(
             current = store.fontScale,
-            onBack = { screen = Screen.Settings },
+            onBack = { navBack() },
             onSelect = { store.updateFontScale(it) },
         )
 
-        Screen.Account -> AccountScreen(onBack = { screen = Screen.Settings })
+        Screen.Account -> AccountScreen(
+            userName = store.userName,
+            userAvatar = store.userAvatar,
+            onBack = { navBack() },
+        )
 
-        Screen.Data -> DataScreen(onBack = { screen = Screen.Settings })
+        Screen.Data -> {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            DataScreen(
+                onBack = { navBack() },
+                onShareCurrent = { vm.currentConversationText() },
+                onExportAll = {
+                    scope.launch {
+                        val text = withContext(Dispatchers.IO) { vm.exportAllText() }
+                        if (text.isBlank()) {
+                            Toast.makeText(ctx, "还没有可导出的对话", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "DeepSeek 对话导出")
+                                putExtra(Intent.EXTRA_TEXT, text)
+                            }
+                            ctx.startActivity(Intent.createChooser(intent, "导出对话"))
+                        }
+                    }
+                },
+                onDeleteAll = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) { vm.deleteAllConversations() }
+                        refreshDrawer()
+                        Toast.makeText(ctx, "已删除所有历史对话", Toast.LENGTH_SHORT).show()
+                    }
+                },
+            )
+        }
 
-        Screen.Personalization -> PersonalizationScreen(onBack = { screen = Screen.Settings })
+        Screen.Personalization -> PersonalizationScreen(
+            autoCollapse = store.autoCollapseReasoning,
+            onAutoCollapseChange = { store.updateAutoCollapseReasoning(it) },
+            onBack = { navBack() },
+        )
 
         Screen.Model -> ModelSettingsScreen(
             store = store,
-            onBack = { screen = Screen.Settings },
+            onBack = { navBack() },
         )
 
         Screen.Settings -> SettingsScreen(
             versionName = "0.1.0(1)",
             modelLabel = store.model.ifBlank { "未配置" },
             themeLabel = AppearanceOptions.firstOrNull { it.first == store.themeMode }?.second ?: "跟随系统",
-            isSystemDark = isSystemInDarkTheme(),
+            // 图标跟“最终生效主题”走，而不是系统深色；system 模式下两者相等，
+            // 但用户强制浅色/深色时必须以 store.themeMode 的结果为准。
+            isDarkTheme = isDark,
             voiceLabel = SettingsStore.TTS_VOICES.firstOrNull { it.first == store.ttsVoice }?.second ?: "海星",
-            onBack = { screen = Screen.Chat },
-            onModel = { screen = Screen.Model },
-            onAccount = { screen = Screen.Account },
-            onData = { screen = Screen.Data },
-            onPersonalization = { screen = Screen.Personalization },
-            onFontSize = { screen = Screen.FontSize },
+            // 返回时 pop 回上一层，会话页那层记着"抽屉是开着的"，所以能还原成推页形态
+            onBack = { navBack() },
+            onModel = { navPush(Screen.Model) },
+            onAccount = { navPush(Screen.Account) },
+            onData = { navPush(Screen.Data) },
+            onPersonalization = { navPush(Screen.Personalization) },
+            onFontSize = { navPush(Screen.FontSize) },
             onLanguage = { showLanguage = true },
             onVoiceTone = { showVoiceTone = true },
             onAgreement = { webTarget = "https://cdn.deepseek.com/policies/zh-CN/deepseek-terms-of-use.html" to "服务协议" },
@@ -313,18 +403,19 @@ private fun App() {
 
         Screen.Chat -> PushDrawerLayout(
             drawerOpen = drawerOpen,
-            onDrawerOpenChange = { drawerOpen = it },
+            onDrawerOpenChange = { setDrawerOpen(it) },
             drawer = { modifier ->
                 ConversationDrawer(
                     state = drawer,
                     modifier = modifier,
                     onSearchClick = {
-                        drawerOpen = false
-                        screen = Screen.Search
+                        // 保留抽屉的展开状态：搜索是从抽屉里进的，返回 pop 回来仍是
+                        // "左历史右会话"，而不是掉到纯会话页
+                        navPush(Screen.Search)
                     },
                     onConversationClick = { conversation ->
                         vm.open(conversation.id)
-                        drawerOpen = false
+                        setDrawerOpen(false)
                     },
                     onLongPress = { conversation -> deleteTarget = conversation },
                     onRename = { conversation -> renameTarget = conversation },
@@ -356,15 +447,15 @@ private fun App() {
                         refreshDrawer()
                     },
                     onFooterClick = {
-                        drawerOpen = false
-                        screen = Screen.Settings
+                        // 故意不关抽屉：会话页那层继续记着 open，从设置返回才能还原推页形态
+                        navPush(Screen.Settings)
                     },
                 )
             },
         ) {
             ChatScreen(
                 state = chat,
-                onMenuClick = { drawerOpen = true },
+                onMenuClick = { setDrawerOpen(true) },
                 onNewChatClick = { vm.newChat() },
                 onToggleSpeechOutput = { vm.toggleSpeechOutput() },
                 onTextChange = { vm.updateInput(it) },

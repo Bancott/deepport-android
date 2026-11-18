@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -34,13 +33,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.deepseekclone.ui.theme.DsTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.pow
-import kotlin.math.roundToInt
 
 private const val LAG_POWER = 2.2f
 
@@ -69,6 +66,8 @@ fun PushDrawerLayout(
 ) {
     val colors = DsTheme.colors
     val isLight = colors.bg.luminance() > 0.5f
+    // 直接以目标态起手：从设置页返回时，会话页那层仍记着 drawerOpen=true，
+    // 若从 0 起播动画会先闪一帧纯会话界面再"拉回"抽屉，反而不符合预期。
     var progress by remember { mutableFloatStateOf(if (drawerOpen) 1f else 0f) }
     val scope = rememberCoroutineScope()
     val velocityTracker = remember { VelocityTracker() }
@@ -103,6 +102,9 @@ fun PushDrawerLayout(
         val drawerWidthPx = with(density) { drawerWidth.toPx() }
         val screenWidthPx = with(density) { maxWidth.toPx() }
         val dragSpanPx = screenWidthPx * DRAG_SPAN_RATIO
+        // 每帧都要用的量提前算好，别把 dp→px 的密度查找带进绘制阶段
+        val pageTravelPx = with(density) { (drawerWidth - 10.dp).toPx() }
+        val liftedShape = remember { RoundedCornerShape(20.dp) }
 
         Box(
             modifier = Modifier
@@ -161,9 +163,9 @@ fun PushDrawerLayout(
                 modifier = Modifier
                     .width(drawerWidth)
                     .fillMaxHeight()
-                    .offset {
-                        IntOffset((-drawerWidthPx + drawerWidthPx * progress).roundToInt(), 0)
-                    },
+                    // 用 graphicsLayer 平移：只走绘制阶段，抽屉里的 LazyColumn 不会每帧重新布局；
+                    // 也不取整，浮点位移才不会有整像素跳格（之前字体发颤的主因之一）
+                    .graphicsLayer { translationX = -drawerWidthPx + drawerWidthPx * progress },
             ) {
                 drawer(Modifier.fillMaxSize())
 
@@ -176,12 +178,12 @@ fun PushDrawerLayout(
                     .fillMaxSize()
                     .graphicsLayer {
                         val pageP = progress.pow(LAG_POWER)
-                        translationX = (drawerWidthPx - 10.dp.toPx()) * pageP
+                        translationX = pageTravelPx * pageP
                         val s = 1f - 0.052f * pageP
                         scaleX = s
                         scaleY = s
                         clip = pageLifted.value
-                        if (pageLifted.value) shape = RoundedCornerShape(20.dp)
+                        if (pageLifted.value) shape = liftedShape
                     }
                     .background(colors.pushedPage),
             ) {
@@ -198,12 +200,16 @@ fun PushDrawerLayout(
 
                 // 卡片左缘 1dp 高光（官方 ≈ #2B2B2B）
                 if (pageLifted.value) {
+                    // 颜色固定、亮度交给 graphicsLayer：避免在组合阶段读 progress 每帧重组这个 Box。
+                    // graphicsLayer 必须写在 background 之前（外层），否则 alpha 罩不住背景，
+                    // 会得到一条 100% 不透明的纯白竖线。
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
                             .fillMaxHeight()
                             .width(1.dp)
-                            .background(if (isLight) Color.Black.copy(alpha = 0.06f * progress) else Color.White.copy(alpha = 0.07f * progress)),
+                            .graphicsLayer { alpha = (if (isLight) 0.06f else 0.07f) * progress }
+                            .background(if (isLight) Color.Black else Color.White),
                     )
                 }
             }
@@ -213,7 +219,9 @@ fun PushDrawerLayout(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .offset { IntOffset((drawerWidthPx * progress).roundToInt(), 0) }
+                        // 只做绘制平移，避免每帧全屏重新布局；
+                        // graphicsLayer 的矩阵会参与坐标换算，点击热区依旧跟着卡片走
+                        .graphicsLayer { translationX = drawerWidthPx * progress }
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -223,25 +231,3 @@ fun PushDrawerLayout(
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

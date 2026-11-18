@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.settings
+package com.example.deepseekclone.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,8 +40,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import com.example.deepseekclone.ui.common.CircleIconButton
 import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.R
@@ -74,11 +85,10 @@ fun SettingsSubPage(
                     .align(Alignment.CenterStart)
                     .padding(start = 16.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.ChevronLeft,
-                    contentDescription = null,
+                SvgIcon(
+                    R.drawable.ic_chevron_left_outline_20,
                     tint = colors.textPrimary,
-                    modifier = Modifier.size(22.dp),
+                    size = 20.dp,
                 )
             }
             Text(
@@ -173,11 +183,10 @@ private fun RowItem(
         }
         if (showChevron && onClick != null) {
             Spacer(Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.Outlined.ChevronRight,
-                contentDescription = null,
+            SvgIcon(
+                R.drawable.ic_chevron_right_outline_20,
                 tint = colors.textSecondary,
-                modifier = Modifier.size(20.dp),
+                size = 20.dp,
             )
         }
     }
@@ -211,87 +220,45 @@ private fun Caption(text: String) {
 /* ------------------------------ 账号管理 ------------------------------ */
 
 @Composable
-fun AccountScreen(onBack: () -> Unit) {
+fun AccountScreen(
+    userName: String,
+    userAvatar: String,
+    onBack: () -> Unit,
+) {
     val colors = DsTheme.colors
+    val loggedIn = userName.isNotBlank() || userAvatar.isNotBlank()
     SettingsSubPage("账号管理", onBack) {
         SectionLabel("账户")
         Card {
             RowItem(
-                title = "手机号",
-                value = "182******20",
+                title = "当前账号",
+                value = if (loggedIn) userName.ifBlank { "已登录" } else "未登录",
                 leading = {
-                    Icon(
-                        imageVector = Icons.Outlined.Phone,
-                        contentDescription = null,
+                    SvgIcon(
+                        R.drawable.ic_user_regular,
                         tint = colors.textPrimary,
-                        modifier = Modifier.size(22.dp),
+                        size = 22.dp,
                     )
                 },
-                onClick = {},
+                showChevron = false,
             )
             Divider()
             RowItem(
-                title = "电子邮箱",
-                value = "ck****5@qq.com",
+                title = "账号体系",
+                value = "本地复刻版",
                 leading = {
-                    Icon(
-                        imageVector = Icons.Outlined.Email,
-                        contentDescription = null,
+                    SvgIcon(
+                        R.drawable.ic_info_outline,
                         tint = colors.textPrimary,
-                        modifier = Modifier.size(22.dp),
+                        size = 22.dp,
                     )
                 },
-            )
-            Divider()
-            RowItem(
-                title = "微信",
-                value = "已绑定",
-                leading = {
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF07C160)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("微", style = DsText.caption.copy(fontSize = 11.sp), color = Color.White)
-                    }
-                },
-                onClick = {},
+                showChevron = false,
             )
         }
-
-        Spacer(Modifier.height(12.dp))
-        Card {
-            RowItem(title = "未成年人模式", value = "已关闭", onClick = {})
-        }
-
-        SectionLabel("安全")
-        Card {
-            RowItem(
-                title = "登录设备管理",
-                leading = {
-                    Icon(
-                        imageVector = Icons.Outlined.Smartphone,
-                        contentDescription = null,
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                },
-                onClick = {},
-            )
-        }
-
-        Spacer(Modifier.height(60.dp))
-        Text(
-            text = "注销账号",
-            style = DsText.label.copy(fontSize = 15.sp),
-            color = colors.danger,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { }
-                .padding(vertical = 16.dp),
+        Caption(
+            "这个复刻版不接入官方账号体系，也没有手机号/微信登录。" +
+                "这里只显示官方充值页登录后缓存的昵称，未登录时不会伪造账号信息。",
         )
     }
 }
@@ -299,42 +266,88 @@ fun AccountScreen(onBack: () -> Unit) {
 /* ------------------------------ 数据管理 ------------------------------ */
 
 @Composable
-fun DataScreen(onBack: () -> Unit) {
-    var optimize by remember { mutableStateOf(true) }
+fun DataScreen(
+    onBack: () -> Unit,
+    onShareCurrent: () -> String? = { null },
+    onExportAll: () -> Unit = {},
+    onDeleteAll: () -> Unit = {},
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var confirmDelete by remember { mutableStateOf(false) }
+    // "数据用于优化体验"已移除：这是自建壳，没有官方后端，这个开关没有任何实际作用。
     SettingsSubPage("数据管理", onBack) {
         Card {
+            // 官方这里是「我共享的链接」（服务端托管的 URL）。没有后端生成不了真链接，
+            // 改成把当前对话交给系统分享面板（文本/邮件/IM 都能接）。
             RowItem(
-                title = "数据用于优化体验",
-                showChevron = false,
-                trailing = { GreenSwitch(optimize) { optimize = it } },
+                title = "分享当前对话",
+                onClick = {
+                    val text = onShareCurrent()
+                    if (text.isNullOrBlank()) {
+                        android.widget.Toast.makeText(context, "当前还没有可分享的内容", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, text)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(intent, "分享对话"))
+                    }
+                },
             )
         }
-        Caption("允许我们将你的对话内容用于优化 DeepSeek 的使用体验。我们保障你的数据隐私安全。")
-
-        Spacer(Modifier.height(8.dp))
-        Card { RowItem(title = "我共享的链接", onClick = {}) }
 
         Spacer(Modifier.height(12.dp))
-        Card { RowItem(title = "导出所有历史对话", onClick = {}) }
+        Card { RowItem(title = "导出所有历史对话", onClick = onExportAll) }
 
         Spacer(Modifier.height(12.dp))
         Card {
-            RowItem(title = "删除所有历史对话", titleColor = DsTheme.colors.danger, onClick = {})
+            RowItem(
+                title = "删除所有历史对话",
+                titleColor = DsTheme.colors.danger,
+                onClick = { confirmDelete = true },
+            )
         }
+    }
+
+    if (confirmDelete) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("删除所有历史对话？", color = DsTheme.colors.textPrimary) },
+            text = { Text("删除后无法恢复，当前会话也会一并清空。", color = DsTheme.colors.textSecondary) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        onDeleteAll()
+                    },
+                ) {
+                    Text("删除", color = DsTheme.colors.danger)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { confirmDelete = false }) {
+                    Text("取消", color = DsTheme.colors.textSecondary)
+                }
+            },
+            containerColor = DsTheme.colors.dialog,
+        )
     }
 }
 
 /* ------------------------------ 个性化 ------------------------------ */
 
 @Composable
-fun PersonalizationScreen(onBack: () -> Unit) {
-    var autoCollapse by remember { mutableStateOf(true) }
+fun PersonalizationScreen(
+    autoCollapse: Boolean,
+    onAutoCollapseChange: (Boolean) -> Unit,
+    onBack: () -> Unit,
+) {
     SettingsSubPage("个性化", onBack) {
         Card {
             RowItem(
                 title = "思考内容自动折叠",
                 showChevron = false,
-                trailing = { GreenSwitch(autoCollapse) { autoCollapse = it } },
+                trailing = { GreenSwitch(autoCollapse, onAutoCollapseChange) },
             )
         }
         Caption("开启后，思考结束后将自动折叠思考内容")
@@ -344,6 +357,7 @@ fun PersonalizationScreen(onBack: () -> Unit) {
 /* ------------------------------ 字体大小 ------------------------------ */
 
 @Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 fun FontSizeScreen(
     current: Float,
     onBack: () -> Unit,
@@ -364,6 +378,12 @@ fun FontSizeScreen(
         mutableStateOf(if (found >= 0) found else 2)
     }
     val colors2 = colors
+    // 预览区按当前档位缩放，页面其他部分保持 1 倍
+    val previewScale = if (followSystem) 1f else steps[index].first
+    // 整页的字号锁成 1 倍：调档时不希望下面的档位卡片一起变大变小，只有上方示例需要缩放
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalDensity provides Density(LocalDensity.current.density, 1f),
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -379,11 +399,10 @@ fun FontSizeScreen(
                     .align(Alignment.CenterStart)
                     .padding(start = 16.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.ChevronLeft,
-                    contentDescription = null,
+                SvgIcon(
+                    R.drawable.ic_chevron_left_outline_20,
                     tint = colors2.textPrimary,
-                    modifier = Modifier.size(22.dp),
+                    size = 20.dp,
                 )
             }
             Text(
@@ -396,6 +415,9 @@ fun FontSizeScreen(
 
         // 预览区：一条用户气泡 + 两段正文
         Column(Modifier.weight(1f).padding(horizontal = 24.dp)) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalDensity provides Density(LocalDensity.current.density, previewScale),
+            ) {
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
                 Box(
@@ -419,6 +441,7 @@ fun FontSizeScreen(
                 style = DsText.body,
                 color = colors2.textPrimary,
             )
+            }
         }
 
         // 底部面板
@@ -448,21 +471,17 @@ fun FontSizeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("A", style = DsText.caption.copy(fontSize = 14.sp), color = colors2.textPrimary)
-                    androidx.compose.material3.Slider(
-                        value = index.toFloat(),
-                        onValueChange = {
-                            index = it.toInt()
-                            followSystem = false
-                            onSelect(steps[index].first)
+                    StepSlider(
+                        index = index,
+                        count = steps.size,
+                        onChange = { i ->
+                            if (i != index) {
+                                index = i
+                                followSystem = false
+                                onSelect(steps[i].first)
+                            }
                         },
-                        valueRange = 0f..(steps.size - 1).toFloat(),
-                        steps = steps.size - 2,
-                        colors = androidx.compose.material3.SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = colors2.textTertiary,
-                            inactiveTrackColor = colors2.outline,
-                        ),
-                        modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                        modifier = Modifier.weight(1f).padding(horizontal = 14.dp),
                     )
                     Text("A", style = DsText.h2.copy(fontSize = 20.sp), color = colors2.textPrimary)
                 }
@@ -477,5 +496,81 @@ fun FontSizeScreen(
             }
         }
     }
+    }
 }
 
+
+/**
+ * 自绘档位条：一条从最左贯到最右的灰线 + 均匀刻度点 + 白色圆点滑块。
+ * 不用 Material3 的 Slider，是因为它两端有 inset、滑块两侧有 gap，怎么调都留缝。
+ */
+@Composable
+private fun StepSlider(
+    index: Int,
+    count: Int,
+    onChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = DsTheme.colors
+    var widthPx by remember { mutableStateOf(1f) }
+    fun pick(x: Float): Int =
+        (x / widthPx * (count - 1)).roundToInt().coerceIn(0, count - 1)
+
+    Box(
+        modifier = modifier
+            .height(36.dp)
+            .onGloballyPositioned { widthPx = it.size.width.toFloat().coerceAtLeast(1f) }
+            .pointerInput(count) {
+                detectTapGestures { o ->
+                    val w = size.width.toFloat().coerceAtLeast(1f)
+                    onChange((o.x / w * (count - 1)).roundToInt().coerceIn(0, count - 1))
+                }
+            }
+            .pointerInput(count) {
+                detectHorizontalDragGestures { change, _ ->
+                    val w = size.width.toFloat().coerceAtLeast(1f)
+                    onChange((change.position.x / w * (count - 1)).roundToInt().coerceIn(0, count - 1))
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxWidth().height(18.dp)) {
+            val cy = size.height / 2f
+            val w = size.width
+            drawLine(
+                color = colors.outline,
+                start = Offset(0f, cy),
+                end = Offset(w, cy),
+                strokeWidth = 16.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+            val frac = if (count > 1) index.toFloat() / (count - 1) else 0f
+            drawLine(
+                color = colors.textTertiary,
+                start = Offset(0f, cy),
+                end = Offset(w * frac, cy),
+                strokeWidth = 16.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+            for (i in 0 until count) {
+                val x = if (count > 1) w * i / (count - 1) else w / 2
+                drawCircle(
+                    color = if (i <= index) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.35f),
+                    radius = 5.dp.toPx(),
+                    center = Offset(x, cy),
+                )
+            }
+        }
+        val density = LocalDensity.current
+        val frac = if (count > 1) index.toFloat() / (count - 1) else 0f
+        val thumbX = with(density) { (widthPx * frac).toDp() }
+        Box(
+            Modifier
+                .align(Alignment.CenterStart)
+                .offset(x = thumbX - 8.dp)
+                .size(16.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(Color.White),
+        )
+    }
+}

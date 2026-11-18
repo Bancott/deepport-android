@@ -41,7 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.deepseekclone.R
 import com.example.deepseekclone.ui.common.CircleIconButton
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
 import kotlinx.coroutines.launch
@@ -54,15 +56,20 @@ private data class VoiceTone(
     val glow: Boolean,
 )
 
-/** 服务端目前只开放 stella / tide 两档音色，界面按官方那种大圆角柔光卡呈现 */
+/**
+ * 官方四档朗读音色（与 App 内顺序一致）：
+ * 贝壳 / 白浪 / 海星 / 暗潮，接口 id 分别对应 mira / echo / stella / tide。
+ */
 private val VoiceTones = listOf(
-    VoiceTone(id = "stella", name = "海星", subtitle = "清晰自然", glow = false),
-    VoiceTone(id = "tide", name = "暗潮", subtitle = "低沉磁性", glow = true),
+    VoiceTone(id = "mira", name = "贝壳", subtitle = "百变活泼", glow = false),
+    VoiceTone(id = "echo", name = "白浪", subtitle = "明朗坚定", glow = true),
+    VoiceTone(id = "stella", name = "海星", subtitle = "俏皮甜美", glow = false),
+    VoiceTone(id = "tide", name = "暗潮", subtitle = "低沉浑厚", glow = true),
 )
 
 /**
  * 朗读音色选择（底部弹层）：横向滑动卡片 + 圆点 + 确认。
- * 与官方「朗读音色」弹窗同样的结构，只是音色按接口能力收敛为两档。
+ * 与官方「朗读音色」弹窗同样的结构。
  */
 @Composable
 fun VoiceToneDialog(
@@ -120,11 +127,10 @@ fun VoiceToneDialog(
                                 .padding(end = 12.dp),
                             containerColor = colors.surface3,
                         ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Close,
-                                contentDescription = null,
+                            SvgIcon(
+                                R.drawable.ic_close_outline_20,
                                 tint = colors.textPrimary,
-                                modifier = Modifier.size(20.dp),
+                                size = 20.dp,
                             )
                         }
                     }
@@ -133,14 +139,14 @@ fun VoiceToneDialog(
                         state = pager,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(160.dp),
-                        contentPadding = PaddingValues(horizontal = 48.dp),
-                        pageSpacing = 16.dp,
+                            .height(120.dp),
+                        contentPadding = PaddingValues(horizontal = 56.dp),
+                        pageSpacing = 14.dp,
                     ) { page ->
                         VoiceCard(voice = VoiceTones[page])
                     }
 
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(14.dp))
                     Text(
                         text = VoiceTones.firstOrNull { it.id == draft }?.name.orEmpty(),
                         style = DsText.h2.copy(fontSize = 19.sp),
@@ -211,14 +217,14 @@ private fun VoiceCard(voice: VoiceTone) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(150.dp)
-            .clip(RoundedCornerShape(75.dp))
+            .height(110.dp)
+            .clip(RoundedCornerShape(55.dp))
             .background(colors.voiceCard),
     ) {
         Box(
             modifier = Modifier
-                .size(190.dp)
-                .offset(x = 24.dp, y = (-64).dp)
+                .size(140.dp)
+                .offset(x = 18.dp, y = (-48).dp)
                 .background(
                     Brush.radialGradient(
                         listOf(topGlow, Color.Transparent),
@@ -228,9 +234,9 @@ private fun VoiceCard(voice: VoiceTone) {
         )
         Box(
             modifier = Modifier
-                .size(150.dp)
+                .size(110.dp)
                 .align(Alignment.BottomEnd)
-                .offset(x = 24.dp, y = 40.dp)
+                .offset(x = 18.dp, y = 30.dp)
                 .background(
                     Brush.radialGradient(
                         listOf(bottomGlow, Color.Transparent),

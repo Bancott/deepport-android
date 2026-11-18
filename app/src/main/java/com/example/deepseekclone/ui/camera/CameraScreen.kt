@@ -60,7 +60,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.example.deepseekclone.R
 import com.example.deepseekclone.ui.common.CircleIconButton
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DsText
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
@@ -207,11 +209,10 @@ fun CameraScreen(
                     },
                     containerColor = Color.Black.copy(alpha = 0.35f),
                 ) {
-                    Icon(
-                        imageVector = if (torchOn) Icons.Outlined.FlashOn else Icons.Outlined.FlashOff,
-                        contentDescription = null,
+                    SvgIcon(
+                        if (torchOn) R.drawable.ic_flash_on_fill_24 else R.drawable.ic_flash_off_fill_24,
                         tint = Color.White,
-                        modifier = Modifier.size(20.dp),
+                        size = 20.dp,
                     )
                 }
                 CircleIconButton(
@@ -226,11 +227,10 @@ fun CameraScreen(
                     },
                     containerColor = Color.Black.copy(alpha = 0.35f),
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Cameraswitch,
-                        contentDescription = null,
+                    SvgIcon(
+                        R.drawable.ic_rotate_left_outline_thin_20,
                         tint = Color.White,
-                        modifier = Modifier.size(20.dp),
+                        size = 20.dp,
                     )
                 }
             }
@@ -304,11 +304,10 @@ fun CameraScreen(
                 onClick = onClose,
                 containerColor = Color.Black.copy(alpha = 0.35f),
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = null,
+                SvgIcon(
+                    R.drawable.ic_close_outline_24,
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp),
+                    size = 20.dp,
                 )
             }
         }

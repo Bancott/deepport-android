@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Extracted from official DeepSeek Android 2.8.0: drawable/ic_photo_error_filled -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:height="40dp"
+    android:width="41dp"
+    android:viewportWidth="41"
+    android:viewportHeight="40">
+    <group />
+</vector>

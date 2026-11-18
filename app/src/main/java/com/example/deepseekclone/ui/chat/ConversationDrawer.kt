@@ -1,10 +1,19 @@
 package com.example.deepseekclone.ui.chat
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,14 +33,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,6 +56,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.R
 import com.example.deepseekclone.ui.common.CircleIconButton
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
 
@@ -89,41 +109,95 @@ fun ConversationDrawer(
                 // 底部让出系统手势条高度，避免账户名贴住小白条
                 .navigationBarsPadding(),
         ) {
-            if (state.multiSelect) {
-                MultiSelectHeader(onClose = onExitMultiSelect)
-            } else {
-                Spacer(Modifier.height(8.dp))
-                SearchField(onClick = onSearchClick)
-            }
+            AnimatedContent(
+                targetState = state.multiSelect,
+                transitionSpec = {
+                    val forward = targetState
+                    val enter = slideInHorizontally(tween(260)) { width -> if (forward) width / 3 else -width / 3 } +
+                        fadeIn(tween(190))
+                    val exit = slideOutHorizontally(tween(260)) { width -> if (forward) -width / 3 else width / 3 } +
+                        fadeOut(tween(150))
+                    enter togetherWith exit
+                },
+                label = "drawerMode",
+                modifier = Modifier.fillMaxSize(),
+            ) { multiSelect ->
+                Column(Modifier.fillMaxSize()) {
+                    if (multiSelect) {
+                        MultiSelectHeader(onClose = onExitMultiSelect)
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                        SearchField(onClick = onSearchClick)
+                    }
 
-            Box(Modifier.weight(1f)) {
-                if (state.multiSelect) {
-                    MultiSelectList(
-                        groups = state.groups,
-                        selected = state.selectedIds,
-                        onToggleSelect = onToggleSelect,
-                    )
-                } else {
-                    ConversationList(
-                        groups = state.groups,
-                        onClick = onConversationClick,
-                        onLongPress = onLongPress,
-                        onPin = onPin,
-                        onRename = onRename,
-                        onToggleMultiSelect = onToggleMultiSelect,
-                    )
+                    Box(Modifier.weight(1f)) {
+                        if (multiSelect) {
+                            MultiSelectList(
+                                groups = state.groups,
+                                selected = state.selectedIds,
+                                onToggleSelect = onToggleSelect,
+                            )
+                        } else {
+                            ConversationList(
+                                groups = state.groups,
+                                currentId = state.currentId,
+                                onClick = onConversationClick,
+                                onLongPress = onLongPress,
+                                onPin = onPin,
+                                onRename = onRename,
+                                onToggleMultiSelect = onToggleMultiSelect,
+                            )
+                        }
+                    }
+
+                    if (multiSelect) {
+                        MultiSelectBar(
+                            enabled = state.selectedCount > 0,
+                            onPin = onPinSelected,
+                            onDelete = onDeleteSelected,
+                        )
+                    } else {
+                        DrawerFooter(name = state.userName, avatarUrl = state.avatarUrl, onClick = onFooterClick)
+                    }
                 }
             }
+        }
+    }
+}
 
-            if (state.multiSelect) {
-                MultiSelectBar(
-                    enabled = state.selectedCount > 0,
-                    onPin = onPinSelected,
-                    onDelete = onDeleteSelected,
-                )
-            } else {
-                DrawerFooter(name = state.userName, onClick = onFooterClick)
-            }
+/**
+ * 右边界全部取自官方截图实测（屏幕 400dp、抽屉 330dp）：
+ * - 搜索框右缘 304dp，右侧留 26dp
+ * - 历史高亮行右缘 310dp，留 20dp
+ * - 行内三点墨迹右缘 294dp（在高亮行内再缩 16dp）
+ * - 底栏三点墨迹右缘 302dp
+ * - 分组「调节」图标墨迹右缘 294.7dp（官方本身就比搜索框内缩）
+ */
+private val SearchEnd = 26.dp
+private val RowEnd = 20.dp
+private val RowDotsEnd = 16.dp
+private val FooterDotsEnd = 28.dp
+private val TuneEnd = 33.dp
+
+/**
+ * 官方三点：点径 3.3dp、圆心间距 6.7dp。
+ * Material 的 MoreHoriz 点更大、间距只有 5.5dp 左右，所以这里自绘。
+ */
+@Composable
+private fun ThreeDots(
+    color: Color,
+    modifier: Modifier = Modifier,
+    dotSize: Dp = 3.4.dp,
+    gap: Dp = 3.3.dp,
+) {
+    Canvas(
+        modifier.size(width = dotSize * 3 + gap * 2, height = dotSize),
+    ) {
+        val d = dotSize.toPx()
+        val step = d + gap.toPx()
+        val r = d / 2f
+        repeat(3) { i ->
+            drawCircle(color, r, androidx.compose.ui.geometry.Offset(r + step * i, size.height / 2f))
         }
     }
 }
@@ -134,7 +208,7 @@ private fun SearchField(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
+            .padding(start = 16.dp, end = SearchEnd)
             .height(42.dp)
             .clip(CircleShape)
             .background(colors.fieldBg)
@@ -142,11 +216,10 @@ private fun SearchField(onClick: () -> Unit) {
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Search,
-            contentDescription = null,
+        SvgIcon(
+            R.drawable.ic_search_outline_16,
             tint = colors.textSecondary,
-            modifier = Modifier.size(18.dp),
+            size = 18.dp,
         )
         Spacer(Modifier.width(8.dp))
         Text(
@@ -180,11 +253,10 @@ private fun MultiSelectHeader(onClose: () -> Unit) {
             onClick = onClose,
             containerColor = colors.surface2,
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Close,
-                contentDescription = null,
+            SvgIcon(
+                R.drawable.ic_close_outline_20,
                 tint = colors.textPrimary,
-                modifier = Modifier.size(20.dp),
+                size = 20.dp,
             )
         }
     }
@@ -194,6 +266,7 @@ private fun MultiSelectHeader(onClose: () -> Unit) {
 @Composable
 private fun ConversationList(
     groups: List<ConversationGroup>,
+    currentId: String?,
     onClick: (ConversationUi) -> Unit,
     onLongPress: (ConversationUi) -> Unit,
     onPin: (ConversationUi) -> Unit,
@@ -209,7 +282,7 @@ private fun ConversationList(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 22.dp, end = 16.dp, top = 18.dp, bottom = 6.dp),
+                        .padding(start = 22.dp, end = TuneEnd, top = 18.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -219,12 +292,11 @@ private fun ConversationList(
                         modifier = Modifier.weight(1f),
                     )
                     if (group.label == groups.firstOrNull()?.label) {
-                        Icon(
-                            imageVector = Icons.Outlined.Tune,
-                            contentDescription = "多选",
+                        SvgIcon(
+                            R.drawable.ic_checklist_outline_16,
                             tint = colors.textSecondary,
+                            size = 20.dp,
                             modifier = Modifier
-                                .size(20.dp)
                                 .clip(CircleShape)
                                 .clickable(role = Role.Button, onClick = onToggleMultiSelect),
                         )
@@ -232,60 +304,93 @@ private fun ConversationList(
                 }
             }
             items(group.items, key = { it.id }) { conversation ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .combinedClickable(
-                            role = Role.Button,
-                            onClick = { onClick(conversation) },
-                            onLongClick = { menuTarget = conversation },
-                        )
-                        .padding(horizontal = 22.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (conversation.pinned) {
-                        Icon(
-                            imageVector = Icons.Outlined.PushPin,
-                            contentDescription = "已置顶",
-                            tint = colors.textTertiary,
-                            modifier = Modifier.size(13.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
+                val isCurrent = conversation.id == currentId
+                // 长按/点三点时给该行一个灰底；已经是蓝色选中态则不叠灰
+                val isMenuTarget = menuTarget?.id == conversation.id
+                val density = LocalDensity.current
+                var rowTopPx by remember { mutableStateOf(0f) }
+                var rowWidthPx by remember { mutableStateOf(0f) }
+                // 在"点击那一刻"算朝向：组合阶段读 rowTopPx 往往还是 0，会永远判成向下
+                var openOffsetY by remember { mutableStateOf(0.dp) }
+                fun resolveOffsetY() {
+                    openOffsetY = with(density) {
+                        if (rowTopPx.toDp() > 212.dp) (-212).dp else 0.dp
                     }
-                    Text(
-                        text = conversation.title,
-                        style = DsText.label,
-                        color = colors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
                 }
-
-                val target = menuTarget
-                if (target != null && target.id == conversation.id) {
-                    DropdownMenu(
-                        expanded = true,
-                        onDismissRequest = { menuTarget = null },
-                        containerColor = colors.surface3,
+                // 右边缘对齐高亮行右缘（官方菜单卡片与行右缘同为 310dp）
+                val menuOffsetX = with(density) {
+                    rowWidthPx.toDp() - MenuWidth - RowEnd
+                }
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .onGloballyPositioned {
+                                rowTopPx = it.positionInRoot().y
+                                rowWidthPx = it.size.width.toFloat()
+                            }
+                            .padding(start = 10.dp, end = RowEnd)
+                            // 不用 clip：行尾三点要略微越过圆角背景，才能和底部账户行的三点
+                            // 落在同一条竖线上；圆角交给 background 的 shape 自己画
+                            .background(
+                                color = when {
+                                    isCurrent -> colors.primary.copy(alpha = 0.12f)
+                                    isMenuTarget -> colors.surface2
+                                    else -> Color.Transparent
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                            )
+                            .combinedClickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                role = Role.Button,
+                                onClick = { onClick(conversation) },
+                                onLongClick = { resolveOffsetY(); menuTarget = conversation },
+                            )
+                            .padding(start = 12.dp, end = RowDotsEnd),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        ConversationMenuItem("重命名") {
-                            menuTarget = null
-                            onRename(target)
+                        if (conversation.pinned) {
+                            SvgIcon(
+                                R.drawable.ic_pin_outline_20,
+                                tint = if (isCurrent) colors.primary else colors.textTertiary,
+                                size = 14.dp,
+                            )
+                            Spacer(Modifier.width(6.dp))
                         }
-                        ConversationMenuItem(if (target.pinned) "取消置顶" else "置顶") {
-                            menuTarget = null
-                            onPin(target)
+                        Text(
+                            text = conversation.title,
+                            style = DsText.label,
+                            color = if (isCurrent) colors.primary else colors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        // 三点：点它和长按一样进二级菜单
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .clickable(role = Role.Button) { resolveOffsetY(); menuTarget = conversation },
+                            contentAlignment = Alignment.CenterEnd,
+                        ) {
+                            ThreeDots(color = if (isCurrent) colors.primary else colors.textTertiary)
                         }
-                        ConversationMenuItem("多选") {
-                            menuTarget = null
-                            onToggleMultiSelect()
-                        }
-                        ConversationMenuItem("删除", danger = true) {
-                            menuTarget = null
-                            onLongPress(target)
-                        }
+                    }
+
+                    val target = menuTarget
+                    if (target != null && target.id == conversation.id) {
+                        ConversationMenu(
+                            target = target,
+                            offsetY = openOffsetY,
+                            offsetX = menuOffsetX,
+                            onDismiss = { menuTarget = null },
+                            onRename = onRename,
+                            onPin = onPin,
+                            onToggleMultiSelect = onToggleMultiSelect,
+                            onDelete = onLongPress,
+                        )
                     }
                 }
             }
@@ -294,14 +399,63 @@ private fun ConversationList(
     }
 }
 
+private val MenuWidth = 172.dp
+
+/** 会话二级菜单：默认往上弹，上方空间不足时由 DropdownMenu 自己回落到下方 */
+@Composable
+private fun ConversationMenu(
+    target: ConversationUi,
+    offsetY: Dp,
+    offsetX: Dp,
+    onDismiss: () -> Unit,
+    onRename: (ConversationUi) -> Unit,
+    onPin: (ConversationUi) -> Unit,
+    onToggleMultiSelect: () -> Unit,
+    onDelete: (ConversationUi) -> Unit,
+) {
+    val colors = DsTheme.colors
+    DropdownMenu(
+        expanded = true,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.width(MenuWidth),
+        shape = RoundedCornerShape(16.dp),
+        containerColor = colors.surface3,
+        // 官方是从这一行往上弹；offsetY 由行位置决定，顶部几行改朝下，
+        // offsetX 让菜单右边缘对齐条目右边缘
+        offset = DpOffset(offsetX, offsetY),
+    ) {
+        ConversationMenuItem("重命名", R.drawable.ic_edit_outline_20) { onDismiss(); onRename(target) }
+        ConversationMenuItem(
+            if (target.pinned) "取消置顶" else "置顶",
+            if (target.pinned) R.drawable.ic_unpin_outline_20 else R.drawable.ic_pin_outline_20,
+        ) { onDismiss(); onPin(target) }
+        ConversationMenuItem("多选", R.drawable.ic_checklist_outline_16) { onDismiss(); onToggleMultiSelect() }
+        // 功能项与危险项之间用一条细线隔开（官方就是这样分组的）
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            thickness = 0.6.dp,
+            color = colors.outline,
+        )
+        ConversationMenuItem("删除", R.drawable.ic_trash_outline_20, danger = true) { onDismiss(); onDelete(target) }
+    }
+}
+
 @Composable
 private fun ConversationMenuItem(
     text: String,
+    @androidx.annotation.DrawableRes iconRes: Int,
     danger: Boolean = false,
     onClick: () -> Unit,
 ) {
     val colors = DsTheme.colors
     DropdownMenuItem(
+        leadingIcon = {
+            SvgIcon(
+                iconRes,
+                tint = if (danger) colors.danger else colors.textSecondary,
+                size = 18.dp,
+            )
+        },
         text = {
             Text(
                 text = text,
@@ -391,11 +545,10 @@ private fun MultiSelectBar(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.PushPin,
-                    contentDescription = null,
+                SvgIcon(
+                    R.drawable.ic_pin_outline_20,
                     tint = tint,
-                    modifier = Modifier.size(20.dp),
+                    size = 20.dp,
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("置顶", style = DsText.label, color = tint)
@@ -414,11 +567,10 @@ private fun MultiSelectBar(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Delete,
-                    contentDescription = null,
+                SvgIcon(
+                    R.drawable.ic_trash_outline_20,
                     tint = tint,
-                    modifier = Modifier.size(20.dp),
+                    size = 20.dp,
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("删除", style = DsText.label, color = tint)
@@ -428,49 +580,71 @@ private fun MultiSelectBar(
 }
 
 @Composable
-private fun DrawerFooter(name: String, onClick: () -> Unit) {
+private fun DrawerFooter(name: String, avatarUrl: String, onClick: () -> Unit) {
     val colors = DsTheme.colors
+    val loggedIn = avatarUrl.isNotBlank() || name.isNotBlank()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(64.dp)
             .clickable(role = Role.Button, onClickLabel = "进入设置", onClick = onClick)
-            .padding(horizontal = 16.dp),
+            .padding(start = 16.dp, end = FooterDotsEnd),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(colors.surface3),
+                .background(if (loggedIn) colors.surface3 else colors.outline.copy(alpha = 0.5f)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_deepseek_whale),
-                contentDescription = null,
-                tint = colors.primary,
-                modifier = Modifier.size(22.dp),
-            )
+            if (avatarUrl.isNotBlank()) {
+                RemoteAvatar(avatarUrl, 40.dp)
+            } else {
+                Icon(
+                    painter = painterResource(R.drawable.ic_deepseek_whale),
+                    contentDescription = null,
+                    tint = if (loggedIn) colors.primary else colors.textTertiary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
         }
         Spacer(Modifier.width(12.dp))
         Text(
-            text = name,
+            text = if (name.isBlank()) "未登录" else name,
             style = DsText.label,
-            color = colors.textPrimary,
+            color = if (loggedIn) colors.textPrimary else colors.textTertiary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        Icon(
-            imageVector = Icons.Outlined.MoreHoriz,
-            contentDescription = "设置",
-            tint = colors.textSecondary,
-            modifier = Modifier.size(22.dp),
-        )
+        ThreeDots(color = colors.textSecondary)
     }
 }
 
 
-
-
-
+/** 极简网络头像：不引图片库，直接拉一次位图并缓存 */
+@Composable
+private fun RemoteAvatar(url: String, size: androidx.compose.ui.unit.Dp) {
+    var bmp by remember(url) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    androidx.compose.runtime.LaunchedEffect(url) {
+        bmp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout = 4000
+                c.readTimeout = 4000
+                android.graphics.BitmapFactory.decodeStream(c.inputStream)
+                    ?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    val b = bmp
+    if (b != null) {
+        androidx.compose.foundation.Image(
+            bitmap = b,
+            contentDescription = null,
+            modifier = Modifier.size(size).clip(androidx.compose.foundation.shape.CircleShape),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+        )
+    }
+}

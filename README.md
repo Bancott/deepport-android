@@ -1,4 +1,4 @@
-# DeepSeek Clone · 原生 Android 复刻
+﻿# DeepSeek Clone · 原生 Android 复刻
 
 包名 `com.example.deepseekclone`，Kotlin + Jetpack Compose + Material 3，**不使用 WebView 做主 UI**。
 视觉与交互基线来自官方 DeepSeek 2.8.0(297) 安卓版截图（小米 14 / 1200×2670 / 3.0x）。
@@ -96,6 +96,12 @@ tools/icons/               # 图标 SVG 源（chat-demo / traced）+ build_vecto
 
 ### 矢量图标（`res/drawable`）
 
+> **2026-11-18 更新**：组件图标已从官方 Android 2.8.0(297) APK 直接提取，
+> 共 117 个 VectorDrawable + 19 个 4x PNG，源文件在 `tools/icons/official/`，
+> 提取脚本 `tools/icons/extract_official_icons.py`。下表是早期 chat-demo / 描图来源，
+> 现在实际渲染以官方同名资源（`ic_menu_outline_24`、`ic_voice_outline_26`、
+> `ic_keyboard_outline_26`、`ic_add_outline_26`、`ic_send_fill_20`、`ic_stop_fill_20` 等）为准。
+
 | 文件 | 来源 | 说明 |
 |---|---|---|
 | `ic_menu_lines.xml` | chat-demo `IconMenuOutline20` | 上长下短两横线（非 Material 三横线） |
@@ -141,6 +147,21 @@ tools/icons/               # 图标 SVG 源（chat-demo / traced）+ build_vecto
 > 事件名与 JSON `type` 一致，来源来自 `web_search_tool_result` 与 `citations_delta`；流内错误帧（`error`）按 JSON 里的 message 抛出。
 
 
+
+## 5.5 官方 2.8.0 审计（2026-11-18）
+
+对 `D:\接收\DeepSeek_2.8.0.apk`（`com.deepseek.chat` / 2.8.0(297)）做了完整审计：
+设置与个性化、模型三档、7 档字体、附件限制、会话内搜索、分享链接、通话、表格/Mermaid，
+以及 117 个 VectorDrawable + 19 个 4x PNG 组件图标的提取与替换。
+
+- 审计报告与改进清单：[`docs/official-2.8.0-audit.md`](docs/official-2.8.0-audit.md)
+- 图标提取脚本：[`tools/icons/extract_official_icons.py`](tools/icons/extract_official_icons.py)
+- 图标源：[`tools/icons/official/`](tools/icons/official/)
+
+这一轮已落地：官方图标全套替换、设置页对齐、思考自动折叠持久化并真正生效、文件类型图标、
+搜索/来源/相机等页面的图标统一。报告里 P0/P1 项是下一轮建议。
+
+---
 
 ## 6. 分支树 / 会话管理 / 附件 / 语音（本轮）
 

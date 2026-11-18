@@ -30,12 +30,16 @@ class SettingsStore private constructor(context: Context) {
     var fontScale by mutableStateOf(prefs.getFloat(KEY_FONT, 0f))
         private set
 
+    /** 个性化：思考结束后是否自动折叠思考内容（官方默认开启） */
+    var autoCollapseReasoning by mutableStateOf(prefs.getBoolean(KEY_AUTO_COLLAPSE, true))
+        private set
+
     var model by mutableStateOf(
         prefs.getString(KEY_MODEL, "").orEmpty(),
     )
         private set
 
-    /** 朗读音色：stella（海星，女声）/ tide（暗潮，男声） */
+    /** 朗读音色：mira（贝壳）/ echo（白浪）/ stella（海星）/ tide（暗潮） */
     var ttsVoice by mutableStateOf(
         prefs.getString(KEY_TTS_VOICE, DEFAULT_TTS_VOICE).orEmpty().ifBlank { DEFAULT_TTS_VOICE },
     )
@@ -47,7 +51,8 @@ class SettingsStore private constructor(context: Context) {
     }
 
     fun updateTtsVoice(value: String) {
-        val clean = if (value == "tide") "tide" else "stella"
+        // 按 TTS_VOICES 校验，别硬编码：之前只认 tide / stella，选贝壳或白浪会被静默改回海星
+        val clean = TTS_VOICES.firstOrNull { it.first == value }?.first ?: DEFAULT_TTS_VOICE
         ttsVoice = clean
         prefs.edit().putString(KEY_TTS_VOICE, clean).apply()
     }
@@ -55,6 +60,19 @@ class SettingsStore private constructor(context: Context) {
     fun updateBaseUrl(value: String) {
         baseUrl = value
         persist()
+    }
+
+    /** 充值页登录后抓到的昵称（脱敏手机号）与头像地址；空串表示未登录 */
+    var userName by mutableStateOf(prefs.getString("user_name", "").orEmpty())
+        private set
+    var userAvatar by mutableStateOf(prefs.getString("user_avatar", "").orEmpty())
+        private set
+
+    fun updateUserInfo(name: String, avatar: String) {
+        if (name == userName && avatar == userAvatar) return
+        userName = name
+        userAvatar = avatar
+        prefs.edit().putString("user_name", name).putString("user_avatar", avatar).apply()
     }
 
     fun updateThemeMode(value: String) {
@@ -65,6 +83,11 @@ class SettingsStore private constructor(context: Context) {
     fun updateFontScale(value: Float) {
         fontScale = value
         prefs.edit().putFloat(KEY_FONT, value).apply()
+    }
+
+    fun updateAutoCollapseReasoning(value: Boolean) {
+        autoCollapseReasoning = value
+        prefs.edit().putBoolean(KEY_AUTO_COLLAPSE, value).apply()
     }
 
     fun updateModel(value: String) {
@@ -94,9 +117,18 @@ class SettingsStore private constructor(context: Context) {
         const val DEFAULT_TTS_VOICE = "stella"
         /** 官方接口目前只开放这两档音色 */
         val TTS_VOICES = listOf(
+            "mira" to "贝壳",
+            "echo" to "白浪",
             "stella" to "海星",
             "tide" to "暗潮",
         )
+
+        /**
+         * `/v1/tools/tts` 实际只认这两个 voice_id，其余会返回
+         * `invalid_request_error: supported values are 'stella' (default), 'tide'`。
+         * 贝壳 / 白浪 是官方 App 的内测音色，接口层尚未开放。
+         */
+        val TTS_SUPPORTED_VOICES = setOf("stella", "tide")
         val MODELS = listOf(
             "deepseek-chat" to "通用对话（V3）",
             "deepseek-reasoner" to "深度思考（R1）",
@@ -107,6 +139,7 @@ class SettingsStore private constructor(context: Context) {
         private const val KEY_MODEL = "model"
         private const val KEY_THEME = "theme_mode"
         private const val KEY_FONT = "font_scale"
+        private const val KEY_AUTO_COLLAPSE = "auto_collapse_reasoning"
         private const val KEY_TTS_VOICE = "tts_voice"
     }
 }

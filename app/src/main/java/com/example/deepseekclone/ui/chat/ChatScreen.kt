@@ -1,13 +1,19 @@
-﻿package com.example.deepseekclone.ui.chat
-
-import androidx.compose.ui.draw.rotate
+package com.example.deepseekclone.ui.chat
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,12 +47,14 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.R
 import com.example.deepseekclone.ui.common.CircleIconButton
 import com.example.deepseekclone.ui.common.DeepSeekTopBar
-import com.example.deepseekclone.ui.common.SvgIcon
+import com.example.deepseekclone.ui.common.NewChatGlyph
+import com.example.deepseekclone.ui.common.SpeakerGlyph
 import com.example.deepseekclone.ui.theme.DeepSeekTheme
 import com.example.deepseekclone.ui.theme.DsDimen
 import com.example.deepseekclone.ui.theme.DsText
@@ -94,22 +102,52 @@ fun ChatScreen(
     onBranchNext: (MessageUi) -> Unit = {},
 ) {
     val colors = DsTheme.colors
+    val focusManager = LocalFocusManager.current
     // 键盘弹起时：免责声明保持占位（避免收起时整页回跳），
     // 由输入栏自己把这 27dp 抵掉，保证栏底始终贴着键盘上沿 + 8dp。
     val density = LocalDensity.current
     val imeBottomPx = WindowInsets.ime.getBottom(density)
     val disclaimerBlockPx = with(density) { DisclaimerBlockHeight.toPx() }
-    val inputBottomPadding = with(density) {
-        val extra = (imeBottomPx - disclaimerBlockPx).coerceAtLeast(0f)
-        val gap = if (imeBottomPx > 0) 8.dp.toPx() else 0f
-        (extra + gap).toDp()
-    }
+
     // 附件面板：点「+」展开，键盘弹起 / 发出消息后自动收起
     var attachOpen by remember { mutableStateOf(false) }
     var sourcesSheet by remember { mutableStateOf<List<SourceItem>?>(null) }
-    var selectTextFor by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(imeBottomPx) { if (imeBottomPx > 0) attachOpen = false }
+    // 正在原地选中的那条消息；点空白处即取消
+    var messageSelection by remember { mutableStateOf<MessageSelection?>(null) }
+    var selectionStartedAt by remember { mutableLongStateOf(0L) }
+    // 只在键盘"弹起"时收面板。原来写的是 imeBottomPx > 0，键盘收起途中每帧都 > 0，
+    // 会把刚点加号打开的面板立刻关掉（表现为"点加号没反应"）。
+    var lastImePx by remember { mutableIntStateOf(0) }
+    // 持续记录"最近一次非零的键盘高度"。键盘收起时 ime 会归零，
+    // 但插值仍需要它当起点；不能在点加号那一刻去读——那时 clearFocus 已生效，很可能读到 0。
+    var lastNonZeroIme by remember { mutableIntStateOf(0) }
+    LaunchedEffect(imeBottomPx) {
+        if (imeBottomPx > lastImePx) attachOpen = false
+        if (imeBottomPx > 0) lastNonZeroIme = imeBottomPx
+        lastImePx = imeBottomPx
+    }
     LaunchedEffect(state.messages.size) { attachOpen = false }
+
+    // 面板进度同时驱动两件事：输入栏让出的键盘留白、面板自身高度。
+    // 用一个值驱动，两者之和只会单调变化——不会再出现"先被面板顶上去、再被键盘留白拽下来"的折返。
+    val panelVisible = attachOpen && !voiceRecording
+    val panelProgress by animateFloatAsState(
+        targetValue = if (panelVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 240),
+        label = "panelProgress",
+    )
+    // 展开/收起期间都用锁存的键盘高度插值：如果收起时立刻切回 imeBottomPx（通常已经是 0），
+    // 输入栏会在面板退场的第一帧整体下坠，表现就是点“文件”后闪一下。
+    val panelAnimating = attachOpen || panelProgress > 0.001f
+    val padSourcePx = if (panelAnimating) maxOf(lastNonZeroIme, imeBottomPx) else imeBottomPx
+    val inputBottomPadding = with(density) {
+        val gapPx = 8.dp.toPx()
+        val extra = (padSourcePx - disclaimerBlockPx).coerceAtLeast(0f)
+        // 间隙连续衰减：原来写成 if (imeBottomPx > 0) 8.dp else 0.dp，
+        // 键盘收到最后一帧时它会从 8dp 直接归零，输入栏会"跳一下"。
+        val gap = gapPx * (extra / gapPx).coerceIn(0f, 1f)
+        ((extra + gap) * (1f - panelProgress)).toDp()
+    }
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -124,36 +162,45 @@ fun ChatScreen(
                 title = state.title,
                 onMenuClick = onMenuClick,
             ) {
+                // 顶栏朗读按钮：官方三态图标，不再手绘斜线/声波。
+                val reading = state.readingState != ReadAloudState.Idle
+                val speechOn = state.isSpeechOutputOn
                 CircleIconButton(
-                    contentDescription = if (state.isSpeechOutputOn) "关闭朗读" else "开启朗读",
+                    contentDescription = if (speechOn) "关闭自动朗读" else "开启自动朗读",
                     onClick = onToggleSpeechOutput,
                 ) {
-                    // 顶栏用用户提供的「声音」SVG；关闭朗读时叠一条斜线
-                    Box(contentAlignment = Alignment.Center) {
-                        SvgIcon(R.drawable.ic_volume_speaker, tint = colors.textPrimary, size = 22.dp)
-                        if (!state.isSpeechOutputOn) {
-                            Box(
-                                Modifier
-                                    .size(width = 26.dp, height = 1.8.dp)
-                                    .rotate(-45f)
-                                    .background(colors.textPrimary),
-                            )
-                        }
-                    }
+                    SpeakerGlyph(
+                        color = if (reading) colors.primary else colors.textPrimary,
+                        muted = !speechOn,
+                        reading = reading,
+                        iconSize = 24.dp,
+                    )
                 }
                 Spacer(Modifier.width(8.dp))
                 CircleIconButton(
                     contentDescription = "新建对话",
                     onClick = onNewChatClick,
                 ) {
-                    SvgIcon(R.drawable.ic_action_new_chat, tint = colors.textPrimary, size = 21.dp)
+                    NewChatGlyph(colors.textPrimary, iconSize = 24.dp)
                 }
             }
 
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    // 点正文空白处：收起附件面板 + 收键盘。
+                    // 复制 / 分享 / 来源这些按钮自己会消费 tap，不会冒泡到这里，所以不受影响。
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = {
+                            focusManager.clearFocus()
+                            attachOpen = false
+                            // 菜单项那一下点击可能紧跟着穿透到这里，300ms 内不误清刚建立的选区
+                            if (System.currentTimeMillis() - selectionStartedAt > 300) {
+                                messageSelection = null
+                            }
+                        })
+                    },
             ) {
                 if (state.isEmpty) {
                     EmptyState(greeting = state.greeting)
@@ -161,6 +208,11 @@ fun ChatScreen(
                     MessageStream(
                         messages = state.messages,
                         sessionTokens = state.sessionTokens,
+                        selection = messageSelection,
+                        onSelectionChange = { sel ->
+                            messageSelection = sel
+                            if (sel != null) selectionStartedAt = System.currentTimeMillis()
+                        },
                         readingMessageId = state.readingMessageId,
                         readingState = state.readingState,
                         onToggleReasoning = onToggleReasoning,
@@ -171,7 +223,6 @@ fun ChatScreen(
                         onRetry = onRetryMessage,
                         onEdit = onEditMessage,
                         onSourcesClick = { message -> sourcesSheet = message.sources },
-                        onSelectText = { message -> selectTextFor = message.text },
                         onBranchPrev = onBranchPrev,
                         onBranchNext = onBranchNext,
                     )
@@ -189,10 +240,19 @@ fun ChatScreen(
                     .alpha(if (voiceRecording) 0f else 1f),
                 state = state.input,
                 generating = state.isGenerating,
+                attachOpen = attachOpen,
                 onTextChange = onTextChange,
                 onToggleDeepThinking = onToggleDeepThinking,
                 onToggleSmartSearch = onToggleSmartSearch,
-                onAttachClick = { attachOpen = !attachOpen },
+                onAttachClick = {
+                    if (attachOpen) {
+                        attachOpen = false
+                    } else {
+                        // 先收键盘再开面板：键盘还在时开面板会被 ime 变化逻辑立刻关掉
+                        focusManager.clearFocus()
+                        attachOpen = true
+                    }
+                },
                 onRemoveAttachment = onRemoveAttachment,
                 onToggleMode = onToggleInputMode,
                 onDismissTranscribedNotice = onDismissTranscribedNotice,
@@ -204,9 +264,11 @@ fun ChatScreen(
             )
 
             AnimatedVisibility(
-                visible = attachOpen && !voiceRecording,
-                enter = fadeIn() + slideInVertically { it / 4 },
-                exit = fadeOut() + slideOutVertically { it / 4 },
+                visible = panelVisible,
+                // 与 panelProgress 走同一条 240ms 曲线：面板长高的同时，输入栏下方留白按同一进度收回，
+                // 两者相加单调递减，输入栏只会经历一次连续下沉。
+                enter = fadeIn(tween(160)) + expandVertically(tween(240)),
+                exit = fadeOut(tween(140)) + shrinkVertically(tween(240)),
             ) {
                 AttachmentPanel(
                     onCamera = {
@@ -240,10 +302,6 @@ fun ChatScreen(
         // 按住说话：整屏泛光 + 提示 + 波形（盖在最上层；纯绘制，不拦触摸）
         if (voiceRecording) {
             VoiceOverlay(cancel = voiceCancel, levels = voiceLevels)
-        }
-
-        selectTextFor?.let { text ->
-            TextSelectionDialog(text = text, onDismiss = { selectTextFor = null })
         }
 
         sourcesSheet?.let { list ->

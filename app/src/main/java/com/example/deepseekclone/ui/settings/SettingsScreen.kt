@@ -18,35 +18,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Logout
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.ChevronLeft
-import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.FormatSize
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.PersonOutline
-import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.VolumeUp
-import androidx.compose.material.icons.outlined.HelpOutline
-import androidx.compose.material3.Icon
+import androidx.annotation.DrawableRes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.deepseekclone.R
 import com.example.deepseekclone.ui.common.CircleIconButton
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
 
@@ -59,7 +42,7 @@ fun SettingsScreen(
     versionName: String,
     modelLabel: String,
     themeLabel: String = "跟随系统",
-    isSystemDark: Boolean,
+    isDarkTheme: Boolean,
     voiceLabel: String = "海星",
     onBack: () -> Unit,
     onAccount: () -> Unit = {},
@@ -98,11 +81,10 @@ fun SettingsScreen(
                     .align(Alignment.CenterStart)
                     .padding(start = 16.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.ChevronLeft,
-                    contentDescription = null,
+                SvgIcon(
+                    R.drawable.ic_chevron_left_outline_20,
                     tint = colors.textPrimary,
-                    modifier = Modifier.size(22.dp),
+                    size = 20.dp,
                 )
             }
             Text(
@@ -121,49 +103,43 @@ fun SettingsScreen(
         ) {
             SectionLabel("账户")
             SettingsGroup {
-                SettingsRow(Icons.Outlined.PersonOutline, "账号管理", onClick = onAccount)
-                SettingsRow(Icons.Outlined.Storage, "数据管理", onClick = onData)
-                SettingsRow(Icons.Outlined.Tune, "模型设置", value = modelLabel, onClick = onModel)
-                SettingsRow(Icons.Outlined.Info, "DeepSeek 官方充值", value = "官网", onClick = onRecharge)
+                SettingsRow(R.drawable.ic_user_regular, "账号管理", onClick = onAccount)
+                SettingsRow(R.drawable.ic_data_regular, "数据管理", onClick = onData)
+                // 这两项是复刻版新增：官方壳不接官方账号体系，但模型 Key 必须有地方配。
+                SettingsRow(R.drawable.ic_enhance_outline_20, "模型设置", value = modelLabel, onClick = onModel)
+                SettingsRow(R.drawable.ic_redirect_regular, "DeepSeek 官方充值", value = "官网", onClick = onRecharge)
             }
 
             SectionLabel("应用")
             SettingsGroup {
-                SettingsRow(Icons.Outlined.Language, "语言", value = "中文（简体中文）", onClick = onLanguage)
+                SettingsRow(R.drawable.ic_globe_language_regular, "语言", value = "中文（简体中文）", onClick = onLanguage)
                 SettingsRow(
-                    icon = if (isSystemDark) Icons.Outlined.DarkMode else Icons.Outlined.LightMode,
+                    iconRes = if (isDarkTheme) R.drawable.ic_moon_regular else R.drawable.ic_sun_regular,
                     title = "外观",
                     value = themeLabel,
                     onClick = onAppearance,
                 )
-                SettingsRow(Icons.Outlined.FormatSize, "字体大小", onClick = onFontSize)
-                SettingsRow(Icons.Outlined.AutoAwesome, "个性化", onClick = onPersonalization)
+                SettingsRow(R.drawable.ic_size_regular, "字体大小", onClick = onFontSize)
+                SettingsRow(R.drawable.ic_wand, "个性化", onClick = onPersonalization)
             }
 
             SectionLabel("语音")
             SettingsGroup {
-                SettingsRow(Icons.Outlined.VolumeUp, "朗读音色", value = voiceLabel, onClick = onVoiceTone)
+                SettingsRow(R.drawable.ic_play_media_outline_20, "朗读音色", value = voiceLabel, onClick = onVoiceTone)
             }
 
             SectionLabel("关于")
             SettingsGroup {
-                SettingsRow(Icons.Outlined.Info, "检查更新", value = versionName, onClick = onCheckUpdate)
-                SettingsRow(Icons.Outlined.Description, "服务协议", onClick = onAgreement)
+                SettingsRow(R.drawable.ic_info_outline, "检查更新", value = versionName, onClick = onCheckUpdate)
+                SettingsRow(R.drawable.ic_list_pen_regular, "服务协议", onClick = onAgreement)
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(12.dp))
             SettingsGroup {
-                SettingsRow(Icons.Outlined.HelpOutline, "帮助与反馈", onClick = onHelp)
+                SettingsRow(R.drawable.ic_help_outline, "帮助与反馈", onClick = onHelp)
             }
 
-            Spacer(Modifier.height(20.dp))
-            SettingsGroup {
-                SettingsRow(
-                    icon = Icons.AutoMirrored.Outlined.Logout,
-                    title = "退出登录",
-                    onClick = onLogout,
-                )
-            }
+            // 退出登录仍不显示：这个壳没有官方账号会话，放一个按了没反应的入口比没有更糟。
         }
     }
 }
@@ -195,7 +171,7 @@ private fun SettingsGroup(content: @Composable () -> Unit) {
 
 @Composable
 private fun SettingsRow(
-    icon: ImageVector,
+    @DrawableRes iconRes: Int,
     title: String,
     value: String? = null,
     onClick: () -> Unit,
@@ -204,21 +180,16 @@ private fun SettingsRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(56.dp)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = colors.textPrimary,
-            modifier = Modifier.size(22.dp),
-        )
+        SvgIcon(iconRes, tint = colors.textPrimary, size = 22.dp)
         Spacer(Modifier.width(14.dp))
         Text(
             text = title,
-            style = DsText.label,
+            style = DsText.label.copy(fontSize = 16.sp),
             color = colors.textPrimary,
             modifier = Modifier.weight(1f),
         )
@@ -230,11 +201,10 @@ private fun SettingsRow(
                 modifier = Modifier.padding(end = 4.dp),
             )
         }
-        Icon(
-            imageVector = Icons.Outlined.ChevronRight,
-            contentDescription = null,
+        SvgIcon(
+            R.drawable.ic_chevron_right_outline_20,
             tint = colors.textTertiary,
-            modifier = Modifier.size(20.dp),
+            size = 20.dp,
         )
     }
 }

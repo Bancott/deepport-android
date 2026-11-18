@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.settings
+package com.example.deepseekclone.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.deepseekclone.ui.theme.DeepSeekTheme
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
 
@@ -61,13 +62,16 @@ fun SingleChoiceDialog(
     selected: String,
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
+    darkTheme: Boolean = false,
     icon: ImageVector? = null,
 ) {
-    val colors = DsTheme.colors
     // 用 selected 作为 key：外部主题变化后重新打开弹窗时能正确回显当前值
     var draft by remember(selected) { mutableStateOf(selected) }
 
     Dialog(onDismissRequest = onDismiss) {
+        // Dialog 是独立窗口：再把主题显式提供一次，避免弹窗落回 Light 默认值。
+        DeepSeekTheme(darkTheme = darkTheme) {
+        val colors = DsTheme.colors
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -143,6 +147,7 @@ fun SingleChoiceDialog(
                     color = colors.primary,
                 )
             }
+        }
         }
     }
 }

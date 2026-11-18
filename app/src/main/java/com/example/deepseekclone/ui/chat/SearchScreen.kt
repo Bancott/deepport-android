@@ -48,7 +48,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.deepseekclone.R
 import com.example.deepseekclone.ui.common.CircleIconButton
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
 
@@ -86,11 +88,10 @@ fun SearchScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CircleIconButton(contentDescription = "返回", onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = null,
+                SvgIcon(
+                    R.drawable.ic_chevron_left_outline_20,
                     tint = colors.textPrimary,
-                    modifier = Modifier.size(22.dp),
+                    size = 20.dp,
                 )
             }
             Spacer(Modifier.width(6.dp))
@@ -147,11 +148,10 @@ private fun SearchInput(
             .padding(start = 12.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Search,
-            contentDescription = null,
+        SvgIcon(
+            R.drawable.ic_search_outline_16,
             tint = colors.textSecondary,
-            modifier = Modifier.size(18.dp),
+            size = 18.dp,
         )
         Spacer(Modifier.width(8.dp))
         BasicTextField(
@@ -184,11 +184,10 @@ private fun SearchInput(
                 size = 28.dp,
                 onClick = { onQueryChange("") },
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = null,
+                SvgIcon(
+                    R.drawable.ic_close_outline_16,
                     tint = colors.textSecondary,
-                    modifier = Modifier.size(15.dp),
+                    size = 15.dp,
                 )
             }
         }

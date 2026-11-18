@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.common
+package com.example.deepseekclone.ui.common
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -18,80 +18,84 @@ import androidx.compose.ui.unit.dp
 import com.example.deepseekclone.R
 
 /**
- * 图标分两类：
- * - 官方 chat-demo `icons.tsx` 里的 SVG path 原样转成的 VectorDrawable（菜单 / 深度思考 / 地球 /
- *   新对话 / 复制 / 重新生成 / 朗读 / 发送 / 停止），见 `_audit/import_icons.py`；
- * - 官方安卓 App 截图里才有、chat-demo 没有的（语音输入的圆环声波、分享箭头、加号圈、键盘、鲸鱼），
- *   继续用按 3x 截图描的矢量。
- * 这里只做包装，保证 tint 与内容语义统一。
+ * 官方 2.8.0 组件图标（`res/drawable/ic_*`，多数由 APK 直接提取）。
+ *
+ * 早期版本用 chat-demo 的 Web SVG 和截图描边；现在以 Android APK 里的
+ * VectorDrawable / 4x PNG 为准，路径、线宽、光学留白都跟官方一致。
+ * 这里只做尺寸与 tint 包装，不再二次改几何。
  */
 @Composable
 fun MenuGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 24.dp) {
-    Icon(
-        painter = painterResource(R.drawable.ic_menu_lines),
-        contentDescription = null,
-        modifier = modifier.size(iconSize),
-        tint = color,
-    )
+    SvgIcon(R.drawable.ic_menu_outline_24, tint = color, modifier = modifier, size = iconSize)
 }
 
 @Composable
-fun PlusCircleGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 25.dp) {
-    Icon(
-        painter = painterResource(R.drawable.ic_plus_circle),
-        contentDescription = null,
-        modifier = modifier.size(iconSize),
-        tint = color,
-    )
+fun PlusCircleGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 26.dp) {
+    SvgIcon(R.drawable.ic_add_outline_26, tint = color, modifier = modifier, size = iconSize)
 }
 
 @Composable
-fun VoiceGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 25.dp) {
-    Icon(
-        painter = painterResource(R.drawable.ic_voice),
-        contentDescription = null,
-        modifier = modifier.size(iconSize),
-        tint = color,
-    )
+fun VoiceGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 26.dp) {
+    SvgIcon(R.drawable.ic_voice_outline_26, tint = color, modifier = modifier, size = iconSize)
 }
 
 @Composable
-fun DeepThinkGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 14.dp) {
-    Icon(
-        painter = painterResource(R.drawable.ic_deep_think),
-        contentDescription = null,
-        modifier = modifier.size(iconSize),
-        tint = color,
-    )
+fun KeyboardGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 26.dp) {
+    SvgIcon(R.drawable.ic_keyboard_outline_26, tint = color, modifier = modifier, size = iconSize)
 }
 
-
-/** 智能搜索：用户提供的互联网（地球）矢量，1024 viewBox，图形约占 858/1024 */
 @Composable
-fun GlobeGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 15.7.dp) {
-    Icon(
-        painter = painterResource(R.drawable.ic_globe),
-        contentDescription = null,
-        modifier = modifier.size(iconSize),
-        tint = color,
-    )
+fun NewChatGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 24.dp) {
+    SvgIcon(R.drawable.ic_new_chat_outline_24, tint = color, modifier = modifier, size = iconSize)
 }
 
-/** 发送：官方 chat-demo 的向上箭头 */
 @Composable
-fun SendArrowGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 20.dp) {
-    SvgIcon(R.drawable.ic_send, tint = color, modifier = modifier, size = iconSize)
+fun DeepThinkGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 15.dp) {
+    SvgIcon(R.drawable.ic_think_outline_16, tint = color, modifier = modifier, size = iconSize)
 }
 
-/** 生成中：官方 chat-demo 的圆角方块（停止） */
+/** 智能搜索：官方 16dp 地球，图形占满 16dp 画框 */
 @Composable
-fun StopSquareGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 12.dp) {
-    SvgIcon(R.drawable.ic_stop, tint = color, modifier = modifier, size = iconSize)
+fun GlobeGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 16.dp) {
+    SvgIcon(R.drawable.ic_globe_language_outline_16, tint = color, modifier = modifier, size = iconSize)
 }
 
+/** 发送：官方 16dp 实心向上箭头 */
+@Composable
+fun SendArrowGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 14.dp) {
+    SvgIcon(R.drawable.ic_send_fill_20, tint = color, modifier = modifier, size = iconSize)
+}
+
+/** 生成中：官方 16dp 圆角方块（停止） */
+@Composable
+fun StopSquareGlyph(color: Color, modifier: Modifier = Modifier, iconSize: Dp = 16.dp) {
+    SvgIcon(R.drawable.ic_stop_fill_20, tint = color, modifier = modifier, size = iconSize)
+}
 
 /**
- * 发送：蓝色实心圆 + 官方 chat-demo 的白色向上箭头（有文字时替换语音按钮，尺寸与麦克风一致 24.6dp）
+ * 顶栏自动朗读：直接使用官方 2.8 的 24dp 三态图标。
+ * - 关闭：mute_audio_outline_24（原生带斜线，不再手绘）
+ * - 开启但未播放：play_media_outline_24
+ * - 正在播放：playing_fill_24
+ */
+@Composable
+fun SpeakerGlyph(
+    color: Color,
+    muted: Boolean,
+    reading: Boolean,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 24.dp,
+) {
+    val res = when {
+        reading -> R.drawable.ic_playing_fill_24
+        muted -> R.drawable.ic_mute_audio_outline_24
+        else -> R.drawable.ic_play_media_outline_24
+    }
+    SvgIcon(res, tint = color, modifier = modifier, size = iconSize)
+}
+
+/**
+ * 发送：蓝色实心圆 + 官方 16dp 白色向上箭头（有文字时替换语音按钮，外径与麦克风一致 24.6dp）
  */
 @Composable
 fun SendCircleGlyph(
@@ -104,7 +108,7 @@ fun SendCircleGlyph(
         Canvas(Modifier.fillMaxSize()) {
             drawCircle(color = background, radius = size.minDimension / 2f)
         }
-        SvgIcon(R.drawable.ic_send, tint = arrowColor, size = iconSize * 0.46f)
+        SvgIcon(R.drawable.ic_send_fill_20, tint = arrowColor, size = 12.5.dp)
     }
 }
 

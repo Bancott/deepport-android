@@ -312,18 +312,79 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             return true
         }
         _state.update { it.copy(readingMessageId = message.id) }
+        // 贝壳 / 白浪 是官方 App 的内测音色，/v1/tools/tts 只开放 stella / tide，
+        // 直接提交会 400。这里回退到海星，并说明一句，别让它变成"朗读失败"。
+        val requested = settings.ttsVoice
+        val voice = requested.takeIf { it in SettingsStore.TTS_SUPPORTED_VOICES } ?: "stella"
+        if (voice != requested) {
+            val name = SettingsStore.TTS_VOICES.firstOrNull { it.first == requested }?.second ?: requested
+            _state.update { it.copy(speechError = "「$name」暂未开放，本次用海星朗读") }
+        }
         tts.play(
             repository.synthesizeStream(
                 baseUrl = settings.baseUrl,
                 apiKey = settings.apiKey,
                 text = text,
-                voice = settings.ttsVoice,
+                voice = voice,
             ),
         )
         return true
     }
 
     fun dismissSpeechError() = _state.update { it.copy(speechError = null) }
+
+    /** 抽屉里用来高亮"当前所在会话" */
+    fun currentConversationId(): String = currentId
+
+    /** 充值页登录态回传：昵称 + 头像地址 */
+    fun updateUserInfo(name: String, avatar: String) = settings.updateUserInfo(name, avatar)
+
+    fun userName(): String = settings.userName
+    fun userAvatar(): String = settings.userAvatar
+
+    /** 导出全部历史对话为 Markdown 文本（调用方负责切到 IO 线程） */
+    fun exportAllText(): String {
+        val all = store.loadAll()
+        if (all.isEmpty()) return ""
+        return buildString {
+            all.forEach { c ->
+                appendLine("# ${c.title.ifBlank { "未命名对话" }}")
+                appendLine()
+                c.messages.forEach { m ->
+                    val who = if (m.role == ChatRole.User) "我" else "DeepSeek"
+                    appendLine("**$who**：${TtsPlayer.plainText(m.text)}")
+                    appendLine()
+                }
+                appendLine("---")
+                appendLine()
+            }
+        }.trim()
+    }
+
+    /** 清空所有历史对话，并回到新会话（调用方负责切到 IO 线程） */
+    fun deleteAllConversations() {
+        store.loadAll().forEach { store.delete(it.id) }
+        newChat()
+    }
+
+    /**
+     * 当前会话的可分享纯文本。没有后端，生成不了官方那种在线链接，
+     * 所以「分享」走系统分享面板，内容是标题 + 逐条问答（Markdown 已洗成纯文本）。
+     */
+    fun currentConversationText(): String {
+        val s = _state.value
+        if (s.messages.isEmpty()) return ""
+        val title = s.title.ifBlank { "未命名对话" }
+        return buildString {
+            appendLine("《$title》")
+            appendLine()
+            s.messages.forEach { m ->
+                val who = if (m.role == ChatRole.User) "我" else "DeepSeek"
+                appendLine("$who：${TtsPlayer.plainText(m.text)}")
+                appendLine()
+            }
+        }.trim()
+    }
 
     override fun onCleared() {
         tts.release()
@@ -685,7 +746,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                             nodes[assistantId]?.let {
                                 nodes[assistantId] = it.copy(
                                     status = MessageStatus.Streaming,
-                                    reasoningExpanded = false,
+                                    // 个性化里的「思考内容自动折叠」真正生效：关掉时正文开始后
+                                    // 仍保持思考块展开，用户可以边看正文边对照推理。
+                                    reasoningExpanded = !settings.autoCollapseReasoning,
                                 )
                             }
                             _state.update { st ->

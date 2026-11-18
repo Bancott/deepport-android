@@ -35,9 +35,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.deepseekclone.R
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
 import java.io.File
+
+/** 官方 2.8 的文件类型图标；未知后缀回退到文本文件 */
+private fun fileTypeIcon(name: String): Int = when (name.substringAfterLast('.', "").lowercase()) {
+    "pdf" -> R.drawable.ic_type_pdf
+    "xls", "xlsx", "csv" -> R.drawable.ic_type_xls
+    "png", "jpg", "jpeg", "webp", "gif", "heic", "bmp" -> R.drawable.ic_type_pic
+    else -> R.drawable.ic_type_text
+}
 
 /**
  * 本地图片缩略图：按目标尺寸采样解码，避免大图直接进内存。
@@ -66,11 +76,10 @@ fun LocalImage(
                 .background(colors.surface2),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = Icons.Outlined.BrokenImage,
-                contentDescription = "图片不可用",
+            SvgIcon(
+                R.drawable.ic_photo_error_filled,
                 tint = colors.textTertiary,
-                modifier = Modifier.size(20.dp),
+                size = 20.dp,
             )
         }
     }
@@ -145,11 +154,10 @@ private fun RemoveBadge(modifier: Modifier = Modifier, onClick: () -> Unit) {
             .clickable(role = Role.Button, onClickLabel = "移除附件", onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = Icons.Outlined.Close,
-            contentDescription = null,
+        SvgIcon(
+            R.drawable.ic_close_outline_16,
             tint = colors.textPrimary,
-            modifier = Modifier.size(12.dp),
+            size = 12.dp,
         )
     }
 }
@@ -169,11 +177,10 @@ fun FileAttachmentTile(
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = Icons.Outlined.Description,
-                contentDescription = null,
+            SvgIcon(
+                fileTypeIcon(item.displayName),
                 tint = colors.textSecondary,
-                modifier = Modifier.size(if (compact) 20.dp else 22.dp),
+                size = if (compact) 20.dp else 22.dp,
             )
             if (compact) {
                 Spacer(Modifier.height(2.dp))
@@ -215,11 +222,10 @@ fun MessageAttachments(items: List<AttachmentUi>) {
                         .padding(horizontal = 12.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Description,
-                        contentDescription = null,
+                    SvgIcon(
+                        fileTypeIcon(item.displayName),
                         tint = colors.textSecondary,
-                        modifier = Modifier.size(18.dp),
+                        size = 18.dp,
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(

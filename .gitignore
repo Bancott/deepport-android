@@ -6,3 +6,7 @@ local.properties
 .idea/
 .DS_Store
 captures/
+
+# 分析产物 / 临时截图不入库
+.gradle-tmp-*
+tools/jadx/

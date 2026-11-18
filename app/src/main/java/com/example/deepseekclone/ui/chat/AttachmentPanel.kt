@@ -12,20 +12,17 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.PhotoCamera
-import androidx.compose.material3.Icon
+import androidx.annotation.DrawableRes
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.deepseekclone.R
+import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
 
@@ -52,19 +49,19 @@ fun AttachmentPanel(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             PanelTile(
-                icon = Icons.Outlined.PhotoCamera,
+                iconRes = R.drawable.ic_camera_outline_20,
                 label = "拍照",
                 modifier = Modifier.weight(1f),
                 onClick = onCamera,
             )
             PanelTile(
-                icon = Icons.Outlined.Image,
+                iconRes = R.drawable.ic_photo_outline_20,
                 label = "相册",
                 modifier = Modifier.weight(1f),
                 onClick = onGallery,
             )
             PanelTile(
-                icon = Icons.Outlined.AttachFile,
+                iconRes = R.drawable.ic_folder_outline_20,
                 label = "文件",
                 modifier = Modifier.weight(1f),
                 onClick = onFile,
@@ -75,7 +72,7 @@ fun AttachmentPanel(
 
 @Composable
 private fun PanelTile(
-    icon: ImageVector,
+    @DrawableRes iconRes: Int,
     label: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
@@ -90,11 +87,10 @@ private fun PanelTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
+        SvgIcon(
+            iconRes,
             tint = colors.textPrimary,
-            modifier = Modifier.size(21.dp),
+            size = 21.dp,
         )
         Spacer(Modifier.height(9.dp))
         Text(

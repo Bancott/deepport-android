@@ -1,7 +1,9 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import com.example.deepseekclone.R
-
+import com.example.deepseekclone.ui.common.SvgIcon
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,9 +31,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
@@ -44,10 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.ui.common.CircleIconButton
 import com.example.deepseekclone.ui.common.SendCircleGlyph
-import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.common.DeepThinkGlyph
 import com.example.deepseekclone.ui.common.DsAssistChip
 import com.example.deepseekclone.ui.common.GlobeGlyph
+import com.example.deepseekclone.ui.common.KeyboardGlyph
 import com.example.deepseekclone.ui.common.PlusCircleGlyph
 import com.example.deepseekclone.ui.common.SendArrowGlyph
 import com.example.deepseekclone.ui.common.StopSquareGlyph
@@ -67,6 +71,7 @@ fun DsInputBar(
     state: InputUiState,
     generating: Boolean,
     modifier: Modifier = Modifier,
+    attachOpen: Boolean = false,
     onTextChange: (String) -> Unit = {},
     onToggleDeepThinking: () -> Unit = {},
     onToggleSmartSearch: () -> Unit = {},
@@ -132,6 +137,7 @@ fun DsInputBar(
             ActionRow(
                 state = state,
                 generating = generating,
+                attachOpen = attachOpen,
                 onToggleDeepThinking = onToggleDeepThinking,
                 onToggleSmartSearch = onToggleSmartSearch,
                 onAttachClick = onAttachClick,
@@ -268,11 +274,10 @@ private fun TranscribedNotice(
             onClick = onDismiss,
             size = 24.dp,
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Close,
-                contentDescription = null,
+            SvgIcon(
+                R.drawable.ic_close_outline_16,
                 tint = colors.textSecondary,
-                modifier = Modifier.size(14.dp),
+                size = 14.dp,
             )
         }
     }
@@ -282,6 +287,7 @@ private fun TranscribedNotice(
 private fun ActionRow(
     state: InputUiState,
     generating: Boolean,
+    attachOpen: Boolean,
     onToggleDeepThinking: () -> Unit,
     onToggleSmartSearch: () -> Unit,
     onAttachClick: () -> Unit,
@@ -309,10 +315,20 @@ private fun ActionRow(
 
         Spacer(Modifier.weight(1f))
 
+        // 加号：面板展开时转 45° 变成叉号，既提示"再点一次收起"，也让状态可见
+        val plusRotation by animateFloatAsState(
+            targetValue = if (attachOpen) 45f else 0f,
+            animationSpec = tween(durationMillis = 180),
+            label = "attachPlusRotation",
+        )
         CircleIconButton(
-            contentDescription = "添加附件",
+            contentDescription = if (attachOpen) "收起附件" else "添加附件",
             onClick = onAttachClick,
-        ) { PlusCircleGlyph(color = colors.textPrimary, iconSize = 25.dp) }
+        ) {
+            Box(Modifier.rotate(plusRotation)) {
+                PlusCircleGlyph(color = colors.textPrimary, iconSize = 26.dp)
+            }
+        }
 
         // 第二个位置：有文字时"语音按钮"就地变成等大的上传（发送）按钮；
         // 没有文字时是麦克风 / 语音模式下是键盘。
@@ -331,10 +347,9 @@ private fun ActionRow(
                 onClick = onToggleMode,
             ) {
                 if (state.mode == InputMode.Text) {
-                    VoiceGlyph(color = colors.textPrimary, iconSize = 25.dp)
+                    VoiceGlyph(color = colors.textPrimary, iconSize = 26.dp)
                 } else {
-                    // 键盘用用户素材：圆环 Ø24.4 与加号/麦克风一致，故画框取 27.7dp
-                    SvgIcon(R.drawable.ic_keyboard_circle, tint = colors.textPrimary, size = 27.7.dp)
+                    KeyboardGlyph(color = colors.textPrimary, iconSize = 26.dp)
                 }
             }
         }
@@ -378,9 +393,9 @@ private fun SendOrStopButton(
         contentAlignment = Alignment.Center,
     ) {
         if (generating) {
-            StopSquareGlyph(color = Color.White, iconSize = 12.dp)
+            StopSquareGlyph(color = Color.White, iconSize = 15.dp)
         } else {
-            SendArrowGlyph(color = Color.White, iconSize = 9.dp)
+            SendArrowGlyph(color = Color.White, iconSize = 14.dp)
         }
     }
 }
