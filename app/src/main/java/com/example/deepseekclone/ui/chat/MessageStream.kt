@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import com.example.deepseekclone.R
 
@@ -95,6 +95,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -281,6 +282,7 @@ private fun MessageBodyText(
     onViewReady: (TextView) -> Unit = {},
     onViewOrigin: (Offset) -> Unit = {},
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     val colors = DsTheme.colors
     val density = LocalDensity.current
@@ -290,7 +292,7 @@ private fun MessageBodyText(
     val isDark = colors === DsDarkColors
     val highlightArgb = (if (isDark) Color(0xFF33426B) else Color(0x664C6EF6)).toArgb()
     val handleColor = if (isDark) Color(0xFF6599FE) else Color(0xFF4C6EF6)
-    val metrics = remember(colors, density) { SpanMetrics(density, colors) }
+    val metrics = remember(colors, density, compact) { SpanMetrics(density, colors, compact) }
     val content = remember(text, markdown, metrics) {
         buildBodySpannable(text, markdown, metrics)
     }
@@ -631,33 +633,40 @@ private fun SelectionMenuItem(label: String, icon: @Composable () -> Unit, onCli
 /**
  * Markdown → Spannable 用的全部排版常量，数值与原 Compose 版 MarkdownText 同源：
  * 正文 17sp/28sp，气泡 17sp/26sp，标题 22/30、20/28，代码 14sp/22sp（框内边距 14dp）。
+ *
+ * [compact] = 思考区排版：官方思考区是独立的一套 markdown typography，
+ * 10 个槽位（h1/h2/h3/正文/列表/引用）全部 15sp / 行高 24sp，块间距 6dp。
  */
-private class SpanMetrics(private val density: Density, colors: DsColors) {
+private class SpanMetrics(
+    private val density: Density,
+    colors: DsColors,
+    private val compact: Boolean = false,
+) {
     private fun sp(v: Float) = with(density) { v.sp.toPx() }
     private fun dp(v: Float) = with(density) { v.dp.toPx() }
 
     /** 基础字号（未被块级样式覆盖的文字都是它） */
-    val textPx = sp(17f)
+    val textPx = sp(if (compact) 15f else 17f)
     /** 正文行高 / 气泡行高 */
-    val bodyLinePx = sp(28f)
-    val tightLinePx = sp(26f)
-    /** 一二级标题 / 三级标题 */
-    val h1SizePx = sp(22f)
-    val h1LinePx = sp(30f)
-    val h2SizePx = sp(20f)
-    val h2LinePx = sp(28f)
+    val bodyLinePx = sp(if (compact) 24f else 28f)
+    val tightLinePx = sp(if (compact) 24f else 26f)
+    /** 一二级标题 / 三级标题（思考区不放大标题） */
+    val h1SizePx = sp(if (compact) 15f else 22f)
+    val h1LinePx = sp(if (compact) 24f else 30f)
+    val h2SizePx = sp(if (compact) 15f else 20f)
+    val h2LinePx = sp(if (compact) 24f else 28f)
     /** 代码块字号 / 行高 / 行内 code 字号 */
-    val codeSizePx = sp(14f)
-    val codeLinePx = sp(22f)
-    val inlineCodePx = sp(15f)
+    val codeSizePx = sp(if (compact) 13f else 14f)
+    val codeLinePx = sp(if (compact) 20f else 22f)
+    val inlineCodePx = sp(if (compact) 14f else 15f)
 
     /** 块间距（段落/列表/代码块之间） */
-    val gapPx = dp(16f)
+    val gapPx = dp(if (compact) 6f else 16f)
     /** 标题上方 / 标题下方附加间距 */
-    val headingTopPx = dp(22f)
-    val headingBottomPx = dp(6f)
+    val headingTopPx = dp(if (compact) 6f else 22f)
+    val headingBottomPx = dp(if (compact) 6f else 6f)
     /** 列表项间距 */
-    val itemGapPx = dp(12f)
+    val itemGapPx = dp(if (compact) 6f else 12f)
     /** 代码块内边距 / 圆角 */
     val codePadPx = dp(14f)
     val codeRadiusPx = dp(12f)
@@ -1252,7 +1261,12 @@ private fun ReasoningSection(message: MessageUi, onToggle: () -> Unit) {
         ) {
             Text(
                 text = headerText,
-                style = DsText.bodyTight,
+                // 官方思考头：17sp / 行高 26sp / SemiBold(600)
+                style = DsText.bodyTight.copy(
+                    fontSize = 17.sp,
+                    lineHeight = 26.sp,
+                    fontWeight = FontWeight.SemiBold,
+                ),
                 color = headerColor,
             )
             Spacer(Modifier.width(8.dp))
@@ -1268,23 +1282,40 @@ private fun ReasoningSection(message: MessageUi, onToggle: () -> Unit) {
         }
 
         if (message.reasoningExpanded && message.reasoning.isNotBlank()) {
+            val isDark = colors === DsDarkColors
+            // 官方思考区竖线：#2AFFFFFF（深 16% 白）/ #14000000（浅 8% 黑）
+            val lineColor = if (isDark) Color(0x2AFFFFFF) else Color(0x14000000)
             Row(
                 modifier = Modifier
                     .padding(top = 8.dp)
                     .height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                // 竖线在内容起点右侧 8dp，上下各内缩 3dp
                 Box(
                     Modifier
-                        .width(1.dp)
-                        .fillMaxHeight()
-                        .background(colors.outline),
-                )
-                Text(
+                        .width(17.dp)
+                        .fillMaxHeight(),
+                ) {
+                    Box(
+                        Modifier
+                            .padding(start = 8.dp)
+                            .width(1.dp)
+                            .fillMaxHeight()
+                            .padding(vertical = 3.dp)
+                            .background(lineColor),
+                    )
+                }
+                // 思考正文：官方独立 markdown 排版，15sp / 行高 24sp / 块间距 6dp
+                MessageBodyText(
                     text = message.reasoning,
-                    style = DsText.bodyTight,
+                    markdown = true,
+                    selectable = false,
+                    initialRange = null,
                     color = colors.textSecondary,
-                    modifier = Modifier.weight(1f),
+                    compact = true,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp, bottom = 16.dp),
                 )
             }
         }
