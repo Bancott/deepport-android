@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -60,6 +61,7 @@ import com.example.deepseekclone.ui.chat.RenameConversationDialog
 import com.example.deepseekclone.ui.chat.SearchScreen
 import com.example.deepseekclone.ui.chat.rememberVoiceInput
 import com.example.deepseekclone.ui.web.WebScreen
+import com.example.deepseekclone.ui.web.openInBrowserTab
 import com.example.deepseekclone.ui.settings.AccountScreen
 import com.example.deepseekclone.ui.settings.AppearanceOptions
 import com.example.deepseekclone.ui.settings.FontSizeScreen
@@ -137,6 +139,8 @@ private fun App(isDark: Boolean) {
     val nav = navStack.last()
     val screen = nav.screen
     val drawerOpen = nav.drawerOpen
+    // Custom Tabs 的顶栏配色（在组合里取好，回调里不能再读 MaterialTheme）
+    val browserChromeColor = MaterialTheme.colorScheme.background.toArgb()
     // 转场方向：+1 = 进页（新页从右侧滑入），-1 = 返回（新页从左侧滑入）。
     // 官方 2.8.0 的录屏里返回就是「新页自左 1/12 屏宽滑入 + 淡入，旧页向右滑出 + 快速淡出」。
     var navForward by remember { mutableStateOf(true) }
@@ -439,7 +443,15 @@ private fun App(isDark: Boolean) {
             onVoiceTone = { showVoiceTone = true },
             onAgreement = { webTarget = "https://cdn.deepseek.com/policies/zh-CN/deepseek-terms-of-use.html" to "服务协议" },
             onHelp = { webTarget = "https://chat.deepseek.com/" to "帮助与反馈" },
-            onRecharge = { webTarget = "https://platform.deepseek.com/top_up" to "DeepSeek 官方充值" },
+            // 充值要走「真浏览器」：支付 scheme 唤起、return_url 回跳、浏览器 Cookie 仓都只有
+            // Custom Tabs / 系统浏览器具备，内置 WebView 里付不出去（详见 WebScreen 顶部说明）。
+            onRecharge = {
+                openInBrowserTab(
+                    context = context,
+                    url = "https://platform.deepseek.com/top_up",
+                    toolbarColor = browserChromeColor,
+                )
+            },
             onAppearance = { showAppearance = true },
         )
 
