@@ -26,6 +26,7 @@ fun DeepSeekTopBar(
     title: String,
     onMenuClick: () -> Unit,
     modifier: Modifier = Modifier,
+    menuDescription: String = "打开会话列表",
     menuContent: @Composable () -> Unit = {
         MenuGlyph(color = DsTheme.colors.textPrimary)
     },
@@ -40,8 +41,10 @@ fun DeepSeekTopBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CircleIconButton(
-            contentDescription = "打开会话列表",
+            contentDescription = menuDescription,
             onClick = onMenuClick,
+            // 官方顶栏导航键（开/关侧边栏）触摸区 44dp
+            size = 44.dp,
             content = menuContent,
         )
         Spacer(Modifier.width(8.dp))

@@ -74,6 +74,7 @@ fun ChatScreen(
     state: ChatUiState,
     modifier: Modifier = Modifier,
     onMenuClick: () -> Unit = {},
+    menuDescription: String = "打开会话列表",
     onNewChatClick: () -> Unit = {},
     onToggleSpeechOutput: () -> Unit = {},
     onTextChange: (String) -> Unit = {},
@@ -166,6 +167,7 @@ fun ChatScreen(
             DeepSeekTopBar(
                 title = state.title,
                 onMenuClick = onMenuClick,
+                menuDescription = menuDescription,
             ) {
                 // 顶栏朗读按钮：官方三态图标，不再手绘斜线/声波。
                 val reading = state.readingState != ReadAloudState.Idle

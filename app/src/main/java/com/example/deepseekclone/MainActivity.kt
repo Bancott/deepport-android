@@ -14,6 +14,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
@@ -315,7 +320,16 @@ private fun App(isDark: Boolean) {
         return
     }
 
-    when (screen) {
+    // 官方：页面切换由 Navigation-Compose 的默认转场完成——进入/返回都是
+    // fadeIn/fadeOut(tween(700))，没有位移、缩放或共享元素（sz6.q / sz6.r → wa3 case 23/24）。
+    AnimatedContent(
+        targetState = screen,
+        transitionSpec = {
+            fadeIn(tween(700)) togetherWith fadeOut(tween(700))
+        },
+        label = "pageTransition",
+    ) { target ->
+    when (target) {
         Screen.Search -> SearchScreen(
             onBack = { navBack() },
             onOpenConversation = { id ->
@@ -455,7 +469,9 @@ private fun App(isDark: Boolean) {
         ) {
             ChatScreen(
                 state = chat,
-                onMenuClick = { setDrawerOpen(true) },
+                // 官方顶栏左键是「开/关侧边栏」：抽屉开着时同一按钮点一下收起
+                onMenuClick = { setDrawerOpen(!drawerOpen) },
+                menuDescription = if (drawerOpen) "关闭会话列表" else "打开会话列表",
                 onNewChatClick = { vm.newChat() },
                 onToggleSpeechOutput = { vm.toggleSpeechOutput() },
                 onTextChange = { vm.updateInput(it) },
@@ -518,6 +534,7 @@ private fun App(isDark: Boolean) {
                 },
             )
         }
+    }
     }
 }
 
