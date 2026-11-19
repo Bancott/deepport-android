@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.PredictiveBackHandler
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,12 +17,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -30,13 +30,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import android.app.Activity
 import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,7 +78,6 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.coroutines.cancellation.CancellationException
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -223,66 +220,18 @@ private fun App(isDark: Boolean) {
     // 启动时先备好列表，抽屉打开就能直接出内容，不用等一次查询
     LaunchedEffect(Unit) { refreshDrawer() }
 
-    // 预测性返回（Manifest 开 enableOnBackInvokedCallback 后系统送跟手进度）：
-    // 手势期间页面按进度缩小+圆角预览，松手完成才走 pop，取消则弹回原状。
     // 返回优先级（同一个 Dispatcher 上后注册的先响应）：网页 → 上一页 → 关抽屉 → 系统退出。
     // 网页层必须单独兜住，否则它会跳过设置直接落在会话页，再按一次就退出了。
-    var backProgress by remember { mutableFloatStateOf(0f) }
-    var settleEpoch by remember { mutableStateOf(0) }
-
-    // 手势结束（完成/取消）后把进度平滑归零：页面“松手回弹/收回”，不瞬跳
-    LaunchedEffect(settleEpoch) {
-        if (settleEpoch > 0 && backProgress > 0f) {
-            animate(
-                initialValue = backProgress,
-                targetValue = 0f,
-                animationSpec = tween(220),
-            ) { v, _ -> backProgress = v }
-        }
+    // 跟官方 2.8.0 录屏一致：拖拽期不做页面缩小预览（页面纹丝不动，只有系统返回把手），
+    // 松手完成才走 pop 转场（下方 AnimatedContent 的 slide+fade）。
+    BackHandler(enabled = webTarget == null && navStack.size > 1) {
+        navBack()
     }
-
-    PredictiveBackHandler(enabled = webTarget == null && navStack.size > 1) { progress ->
-        try {
-            progress.collect { backProgress = it.progress }
-            navBack()
-        } catch (e: CancellationException) {
-            throw e
-        } finally {
-            settleEpoch++
-        }
+    BackHandler(enabled = webTarget == null && navStack.size == 1 && drawerOpen) {
+        setDrawerOpen(false)
     }
-    PredictiveBackHandler(enabled = webTarget == null && navStack.size == 1 && drawerOpen) { progress ->
-        try {
-            progress.collect { backProgress = it.progress }
-            setDrawerOpen(false)
-        } catch (e: CancellationException) {
-            throw e
-        } finally {
-            settleEpoch++
-        }
-    }
-    PredictiveBackHandler(enabled = webTarget != null) { progress ->
-        try {
-            progress.collect { backProgress = it.progress }
-            webTarget = null
-        } catch (e: CancellationException) {
-            throw e
-        } finally {
-            settleEpoch++
-        }
-    }
-
-    // 页面级预测性返回预览：手势期间整页跟手缩小（1→0.91）+ 圆角（0→22dp）。
-    // 抽屉开着时不做（内容层已由 PushDrawerLayout 缩到 0.95，再叠会打架）。
-    val previewModifier = Modifier.graphicsLayer {
-        val p = if (navStack.size == 1 && drawerOpen) 0f else backProgress
-        if (p > 0f) {
-            val s = 1f - 0.09f * p
-            scaleX = s
-            scaleY = s
-            shape = RoundedCornerShape(22.dp * p)
-            clip = true
-        }
+    BackHandler(enabled = webTarget != null) {
+        webTarget = null
     }
 
     if (showAppearance) {
@@ -349,8 +298,7 @@ private fun App(isDark: Boolean) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .then(previewModifier),
+                .background(MaterialTheme.colorScheme.background),
         ) {
             WebScreen(
                 url = url,
@@ -378,18 +326,18 @@ private fun App(isDark: Boolean) {
         return
     }
 
-    // 官方：页面切换由 Navigation-Compose 的默认转场完成——进入/返回都是
-    // fadeIn/fadeOut(tween(700))，没有位移、缩放或共享元素（sz6.q / sz6.r → wa3 case 23/24）。
+    // 官方 2.8.0 返回转场（录屏 VID_20261119_185507 逐帧实测 + 字节码 sz6.q/sz6.r）：
+    // 同向滑移+交叉淡化——新页自左滑入 1/12 屏宽+fadeIn(200)，旧页右滑出 1/12+fadeOut(150)，slide 250ms。
     Box(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .then(previewModifier),
+            .background(MaterialTheme.colorScheme.background),
     ) {
     AnimatedContent(
         targetState = screen,
         transitionSpec = {
-            fadeIn(tween(700)) togetherWith fadeOut(tween(700))
+            (slideInHorizontally(tween(250)) { -it / 12 } + fadeIn(tween(200))) togetherWith
+                (slideOutHorizontally(tween(250)) { it / 12 } + fadeOut(tween(150)))
         },
         label = "pageTransition",
     ) { target ->
