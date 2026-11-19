@@ -501,7 +501,9 @@ private fun App(isDark: Boolean) {
                         refreshDrawer()
                     },
                     onFooterClick = {
-                        // 故意不关抽屉：会话页那层继续记着 open，从设置返回才能还原推页形态
+                        // 官方 2.8.0：从抽屉进设置时就收起抽屉，返回直接落在会话页
+                        // （不是「左历史右会话」的推页态）。
+                        setDrawerOpen(false)
                         navPush(Screen.Settings)
                     },
                 )
