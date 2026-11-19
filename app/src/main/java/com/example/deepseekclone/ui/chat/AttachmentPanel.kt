@@ -28,8 +28,8 @@ import com.example.deepseekclone.ui.theme.DsTheme
 
 /**
  * 输入卡「+」展开的附件面板（对照官方 2.8 实测）：
- * 输入卡下方一整块，三个 114.7×84dp 圆角大方块并排（拍照 / 相册 / 文件），
- * 间距 8dp、左右 20dp，图标 20dp 在上、标签 15sp 在下。
+ * 输入卡下方一整块，三个等宽圆角方块并排（拍照 / 相册 / 文件），
+ * 间距 8dp、组内边距 20/20/20/10，图标在上、标签 15sp/22sp 在下。
  */
 @Composable
 fun AttachmentPanel(
@@ -42,7 +42,7 @@ fun AttachmentPanel(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 16.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 10.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -95,7 +95,7 @@ private fun PanelTile(
         Spacer(Modifier.height(9.dp))
         Text(
             text = label,
-            style = DsText.body.copy(fontSize = 15.sp, lineHeight = 18.sp),
+            style = DsText.body.copy(fontSize = 15.sp, lineHeight = 22.sp),
             color = colors.textPrimary,
         )
     }

@@ -1,13 +1,16 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.expandIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -131,9 +134,11 @@ fun ChatScreen(
     // 面板进度同时驱动两件事：输入栏让出的键盘留白、面板自身高度。
     // 用一个值驱动，两者之和只会单调变化——不会再出现"先被面板顶上去、再被键盘留白拽下来"的折返。
     val panelVisible = attachOpen && !voiceRecording
+    // 官方面板尺寸变化走 150ms、ease-out（cubic-bezier(0,0,0.58,1)）
+    val panelEasing = CubicBezierEasing(0f, 0f, 0.58f, 1f)
     val panelProgress by animateFloatAsState(
         targetValue = if (panelVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 240),
+        animationSpec = tween(durationMillis = 150, easing = panelEasing),
         label = "panelProgress",
     )
     // 展开/收起期间都用锁存的键盘高度插值：如果收起时立刻切回 imeBottomPx（通常已经是 0），
@@ -265,10 +270,26 @@ fun ChatScreen(
 
             AnimatedVisibility(
                 visible = panelVisible,
-                // 与 panelProgress 走同一条 240ms 曲线：面板长高的同时，输入栏下方留白按同一进度收回，
-                // 两者相加单调递减，输入栏只会经历一次连续下沉。
-                enter = fadeIn(tween(160)) + expandVertically(tween(240)),
-                exit = fadeOut(tween(140)) + shrinkVertically(tween(240)),
+                // 官方 ChatInputActionBarImplV2：入场 expandIn 150 + scaleIn 0.6→1（150）+ fadeIn 110（延迟 40）；
+                // 退场 shrinkOut 110 + scaleOut→0.6（110）+ fadeOut 50；曲线统一 ease-out。
+                enter = expandIn(
+                    animationSpec = tween(150, easing = panelEasing),
+                    clip = false,
+                ) + scaleIn(
+                    initialScale = 0.6f,
+                    animationSpec = tween(150, easing = panelEasing),
+                ) + fadeIn(
+                    animationSpec = tween(110, delayMillis = 40, easing = panelEasing),
+                ),
+                exit = shrinkOut(
+                    animationSpec = tween(110, easing = panelEasing),
+                    clip = false,
+                ) + scaleOut(
+                    targetScale = 0.6f,
+                    animationSpec = tween(110, easing = panelEasing),
+                ) + fadeOut(
+                    animationSpec = tween(50, easing = panelEasing),
+                ),
             ) {
                 AttachmentPanel(
                     onCamera = {

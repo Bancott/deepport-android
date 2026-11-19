@@ -317,15 +317,18 @@ private fun ActionRow(
 
         Spacer(Modifier.weight(1f))
 
-        // 加号：面板展开时转 45° 变成叉号，既提示"再点一次收起"，也让状态可见
+        // 加号：面板展开时转 45° 变成叉号。
+        // 官方 ChatInputAddActionButton 用的是 animateFloatAsState(target, spec = null)，
+        // 即默认 spring(dampingRatio 1.0, stiffness 1500)，代码里没有毫秒数。
         val plusRotation by animateFloatAsState(
             targetValue = if (attachOpen) 45f else 0f,
-            animationSpec = tween(durationMillis = 180),
             label = "attachPlusRotation",
         )
+        // 官方触摸盒 64×64dp（图标 26dp）
         CircleIconButton(
             contentDescription = if (attachOpen) "收起附件" else "添加附件",
             onClick = onAttachClick,
+            size = 64.dp,
         ) {
             Box(Modifier.rotate(plusRotation)) {
                 PlusCircleGlyph(color = colors.textPrimary, iconSize = 26.dp)
