@@ -6,19 +6,21 @@ plugins {
 }
 
 android {
-    namespace = "com.example.deepseekclone"
+    namespace = "io.github.bancott.deepport"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.deepseekclone"
+        applicationId = "io.github.bancott.deepport"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 1000000
+        versionName = "1.0.0"
     }
 
     buildFeatures {
         compose = true
+        // 设置页从 BuildConfig 读版本号，避免硬编码
+        buildConfig = true
     }
 
     compileOptions {

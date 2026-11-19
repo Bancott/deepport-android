@@ -1,7 +1,28 @@
-﻿# DeepSeek Clone · 原生 Android 复刻
+﻿# DeepPort · 第三方 DeepSeek 客户端（Android）
 
-包名 `com.example.deepseekclone`，Kotlin + Jetpack Compose + Material 3，**不使用 WebView 做主 UI**。
-视觉与交互基线来自官方 DeepSeek 2.8.0(297) 安卓版截图（小米 14 / 1200×2670 / 3.0x）。
+> **本项目为第三方开发者作品，基于 DeepSeek 开放 API 构建，并非 DeepSeek 官方产品，也不代表官方立场。**
+> 应用本身免费，但调用模型需要你自备 API Key（由服务商按量计费）。请认准官网 deepseek.com，不要在其他网站输入密钥或付款。
+
+包名 `io.github.bancott.deepport`，Kotlin + Jetpack Compose + Material 3。
+视觉与交互基线来自官方 DeepSeek 2.8.0(297) 安卓版（小米 14 / 1200×2670 / 3.0x）。
+项目主页：<https://github.com/Bancott/deepport-android>
+
+## 获取 API Key 与充值
+
+两种入口任选其一，进入官方开放平台后的步骤相同：
+
+1. 直接打开 <https://www.deepseek.com/>，点击「API 开放平台」；
+2. 在本应用「设置 → DeepSeek 官方充值」，会跳转浏览器打开官方平台。
+
+进入平台后：登录（没有账号先注册）→ 在「充值」页完成支付 → 左侧「API keys」→「创建 API Key」→ 填写名称 → 复制保存。
+Key 只在创建时完整显示一次，关闭后无法再次查看；如果泄露或不再使用，请直接删除。
+
+## 版本规范
+
+- `versionName` 用 SemVer：`MAJOR.MINOR.PATCH`，预发布加 `-beta.N` / `-rc.N`；
+- `versionCode = major × 1_000_000 + minor × 1_000 + patch × 10 + channel`（channel：0 正式、1 beta、2 rc）；
+  例：`1.2.3` → `1020030`，`2.0.0-beta.1` → `2000001`；
+- 每次发布打 tag `vX.Y.Z`，Release 附 `app-debug.apk` 或签名后的 release APK。
 
 ---
 
@@ -28,7 +49,7 @@ $env:JAVA_HOME = "D:\tools\jdk17\jdk-17.0.21.0.2+1"
 
 产物：`app/build/outputs/apk/debug/app-debug.apk`
 
-Android Studio：直接 `File > Open` 选择 `DeepSeekClone` 目录，Sync 后运行即可。
+Android Studio：直接 `File > Open` 选择 `DeepPort` 目录，Sync 后运行即可。
 
 > 工程位于含中文的目录，`gradle.properties` 里已加 `android.overridePathCheck=true`。
 > 如果后续遇到 aapt/kotlinc 的路径类报错，把工程移到纯 ASCII 路径（如 `D:\Projects\DeepSeekClone`）即可。
@@ -38,7 +59,7 @@ Android Studio：直接 `File > Open` 选择 `DeepSeekClone` 目录，Sync 后�
 ## 2. 目录结构
 
 ```
-app/src/main/java/com/example/deepseekclone/
+app/src/main/java/io/github/bancott/deepport/
 ├── MainActivity.kt                 # 入口（临时演示宿主，接入 ViewModel 后替换）
 └── ui/
     ├── theme/
