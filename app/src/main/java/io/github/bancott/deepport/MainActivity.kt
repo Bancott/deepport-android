@@ -1,4 +1,4 @@
-﻿package io.github.bancott.deepport
+package io.github.bancott.deepport
 
 import android.os.Bundle
 import android.content.ClipData
@@ -439,6 +439,13 @@ private fun App(isDark: Boolean) {
             onOpenAgreement = {
                 webTarget = "https://cdn.deepseek.com/policies/zh-CN/deepseek-terms-of-use.html" to "服务协议"
             },
+            onCheckUpdate = {
+                openInBrowserTab(
+                    context = context,
+                    url = "https://github.com/Bancott/deepport-android/releases",
+                    toolbarColor = browserChromeColor,
+                )
+            },
         )
 
         Screen.Model -> ModelSettingsScreen(
@@ -447,7 +454,6 @@ private fun App(isDark: Boolean) {
         )
 
         Screen.Settings -> SettingsScreen(
-            versionName = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})",
             modelLabel = store.model.ifBlank { "未配置" },
             themeLabel = AppearanceOptions.firstOrNull { it.first == store.themeMode }?.second ?: "跟随系统",
             // 图标跟“最终生效主题”走，而不是系统深色；system 模式下两者相等，
@@ -463,8 +469,6 @@ private fun App(isDark: Boolean) {
             onFontSize = { navPush(Screen.FontSize) },
             onLanguage = { showLanguage = true },
             onVoiceTone = { showVoiceTone = true },
-            onAgreement = { webTarget = "https://cdn.deepseek.com/policies/zh-CN/deepseek-terms-of-use.html" to "服务协议" },
-            onHelp = { navPush(Screen.Help) },
             onAbout = { navPush(Screen.About) },
             // 充值要走「真浏览器」：支付 scheme 唤起、return_url 回跳、浏览器 Cookie 仓都只有
             // Custom Tabs / 系统浏览器具备，内置 WebView 里付不出去（详见 WebScreen 顶部说明）。

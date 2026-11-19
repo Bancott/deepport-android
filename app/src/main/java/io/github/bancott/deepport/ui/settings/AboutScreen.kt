@@ -1,4 +1,4 @@
-package io.github.bancott.deepport.ui.settings
+﻿package io.github.bancott.deepport.ui.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +19,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Gavel
+import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +51,7 @@ fun AboutScreen(
     onOpenGitHub: () -> Unit,
     onOpenHelp: () -> Unit,
     onOpenAgreement: () -> Unit,
+    onCheckUpdate: () -> Unit,
 ) {
     val colors = DsTheme.colors
     var showLicense by remember { mutableStateOf(false) }
@@ -91,10 +98,20 @@ fun AboutScreen(
 
         Spacer(Modifier.height(16.dp))
         SettingsGroup {
-            SettingsRow(R.drawable.ic_redirect_regular, "项目主页", value = "GitHub", onClick = onOpenGitHub)
-            SettingsRow(R.drawable.ic_help_outline, "帮助与反馈", onClick = onOpenHelp)
-            SettingsRow(R.drawable.ic_list_pen_regular, "服务协议", onClick = onOpenAgreement)
-            SettingsRow(R.drawable.ic_info_outline_16, "开源许可", value = "MIT", onClick = { showLicense = true })
+            SettingsRow(Icons.Outlined.OpenInNew, "项目主页", value = "GitHub", onClick = onOpenGitHub)
+            SettingsRow(Icons.Outlined.HelpOutline, "帮助与反馈", onClick = onOpenHelp)
+            SettingsRow(Icons.Outlined.Description, "服务协议", onClick = onOpenAgreement)
+            SettingsRow(Icons.Outlined.Gavel, "开源许可", value = "MIT", onClick = { showLicense = true })
+        }
+
+        Spacer(Modifier.height(12.dp))
+        SettingsGroup {
+            SettingsRow(
+                Icons.Outlined.Refresh,
+                "检查更新",
+                value = versionName,
+                onClick = onCheckUpdate,
+            )
         }
 
         Spacer(Modifier.height(20.dp))

@@ -1,4 +1,4 @@
-package io.github.bancott.deepport.ui.settings
+﻿package io.github.bancott.deepport.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,11 +19,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.annotation.DrawableRes
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,7 +43,6 @@ import io.github.bancott.deepport.ui.theme.DsTheme
  */
 @Composable
 fun SettingsScreen(
-    versionName: String,
     modelLabel: String,
     themeLabel: String = "跟随系统",
     isDarkTheme: Boolean,
@@ -54,9 +57,6 @@ fun SettingsScreen(
     onFontSize: () -> Unit = {},
     onPersonalization: () -> Unit = {},
     onVoiceTone: () -> Unit = {},
-    onCheckUpdate: () -> Unit = {},
-    onAgreement: () -> Unit = {},
-    onHelp: () -> Unit = {},
     onAbout: () -> Unit = {},
     onLogout: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -131,14 +131,7 @@ fun SettingsScreen(
 
             SectionLabel("关于")
             SettingsGroup {
-                SettingsRow(R.drawable.ic_info_outline, "检查更新", value = versionName, onClick = onCheckUpdate)
-                SettingsRow(R.drawable.ic_list_pen_regular, "服务协议", onClick = onAgreement)
-                SettingsRow(R.drawable.ic_info_outline_16, "关于 DeepPort", onClick = onAbout)
-            }
-
-            Spacer(Modifier.height(12.dp))
-            SettingsGroup {
-                SettingsRow(R.drawable.ic_help_outline, "帮助与反馈", onClick = onHelp)
+                SettingsRow(Icons.Outlined.Info, "关于 DeepPort", onClick = onAbout)
             }
 
             // 退出登录仍不显示：这个壳没有官方账号会话，放一个按了没反应的入口比没有更糟。
@@ -177,6 +170,42 @@ internal fun SettingsRow(
     title: String,
     value: String? = null,
     onClick: () -> Unit,
+) = SettingsRowShell(
+    title = title,
+    value = value,
+    onClick = onClick,
+    icon = {
+        SvgIcon(iconRes, tint = DsTheme.colors.textPrimary, size = 22.dp)
+    },
+)
+
+/** 同一个行样式，图标改用 Material ImageVector：跨图标视觉尺寸一致（关于页用） */
+@Composable
+internal fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    value: String? = null,
+    onClick: () -> Unit,
+) = SettingsRowShell(
+    title = title,
+    value = value,
+    onClick = onClick,
+    icon = {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = DsTheme.colors.textPrimary,
+            modifier = Modifier.size(22.dp),
+        )
+    },
+)
+
+@Composable
+private fun SettingsRowShell(
+    title: String,
+    value: String?,
+    onClick: () -> Unit,
+    icon: @Composable () -> Unit,
 ) {
     val colors = DsTheme.colors
     Row(
@@ -187,7 +216,7 @@ internal fun SettingsRow(
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SvgIcon(iconRes, tint = colors.textPrimary, size = 22.dp)
+        icon()
         Spacer(Modifier.width(14.dp))
         Text(
             text = title,
