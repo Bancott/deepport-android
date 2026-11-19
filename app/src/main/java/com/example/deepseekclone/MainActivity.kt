@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone
+package com.example.deepseekclone
 
 import android.os.Bundle
 import android.content.ClipData
@@ -137,21 +137,27 @@ private fun App(isDark: Boolean) {
     val nav = navStack.last()
     val screen = nav.screen
     val drawerOpen = nav.drawerOpen
+    // 转场方向：+1 = 进页（新页从右侧滑入），-1 = 返回（新页从左侧滑入）。
+    // 官方 2.8.0 的录屏里返回就是「新页自左 1/12 屏宽滑入 + 淡入，旧页向右滑出 + 快速淡出」。
+    var navForward by remember { mutableStateOf(true) }
 
     fun navPush(target: Screen) {
         if (navStack.last().screen == target) return
+        navForward = true
         navStack.add(NavEntry(target))
     }
 
     /** 返回一层；已经在栈底时返回 false，把返回键交还给系统 */
     fun navBack(): Boolean {
         if (navStack.size <= 1) return false
+        navForward = false
         navStack.removeAt(navStack.lastIndex)
         return true
     }
 
     /** 回到会话页并清掉中间层，用于点会话项 / 搜索结果 / 新建对话 */
     fun navResetToChat(drawerOpen: Boolean = false) {
+        navForward = false
         while (navStack.size > 1) navStack.removeAt(navStack.lastIndex)
         navStack[0] = NavEntry(Screen.Chat, drawerOpen)
     }
@@ -326,8 +332,10 @@ private fun App(isDark: Boolean) {
         return
     }
 
-    // 官方 2.8.0 返回转场（录屏 VID_20261119_185507 逐帧实测 + 字节码 sz6.q/sz6.r）：
-    // 同向滑移+交叉淡化——新页自左滑入 1/12 屏宽+fadeIn(200)，旧页右滑出 1/12+fadeOut(150)，slide 250ms。
+    // 官方 2.8.0 返回转场（录屏 VID_20261119_185507 逐帧实测）：
+    // 新页自左滑入 1/12 屏宽（≈33dp）+ fadeIn(200)，旧页向右滑出 1/12 + fadeOut(~100)；
+    // 逐帧量到：新页位移 -76px→0（864px 宽 ≈ 1/11.4），约 230ms 落定，无缩放、无圆角。
+    // 进页方向相反（新页自右滑入、旧页向左滑出），保持同一节奏。
     Box(
         Modifier
             .fillMaxSize()
@@ -336,8 +344,9 @@ private fun App(isDark: Boolean) {
     AnimatedContent(
         targetState = screen,
         transitionSpec = {
-            (slideInHorizontally(tween(250)) { -it / 12 } + fadeIn(tween(200))) togetherWith
-                (slideOutHorizontally(tween(250)) { it / 12 } + fadeOut(tween(150)))
+            val dir = if (navForward) 1 else -1
+            (slideInHorizontally(tween(250)) { w -> dir * (w / 12) } + fadeIn(tween(200))) togetherWith
+                (slideOutHorizontally(tween(250)) { w -> -dir * (w / 12) } + fadeOut(tween(100)))
         },
         label = "pageTransition",
     ) { target ->
