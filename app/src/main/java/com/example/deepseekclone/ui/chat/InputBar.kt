@@ -102,8 +102,9 @@ fun DsInputBar(
             modifier = Modifier.padding(
                 start = 12.dp,
                 end = 10.dp,
-                top = 14.dp,
-                bottom = 10.dp,
+                // 官方实测：卡片高 105.7dp = 上 16 + 文本行 26 + 间距 20 + 操作行 32 + 下 12
+                top = 16.dp,
+                bottom = 12.dp,
             ),
         ) {
             if (editing) {
@@ -139,7 +140,7 @@ fun DsInputBar(
                 )
             }
 
-            Spacer(Modifier.height(15.dp))
+            Spacer(Modifier.height(20.dp))
 
             ActionRow(
                 state = state,
@@ -360,11 +361,11 @@ private fun ActionRow(
             targetValue = if (attachOpen) 45f else 0f,
             label = "attachPlusRotation",
         )
-        // 官方触摸盒 64×64dp（图标 26dp）
+        // 官方操作行高 32dp：图标 26dp 居中，触摸盒同为 32dp（64dp 的触摸层不会撑高行）
         CircleIconButton(
             contentDescription = if (attachOpen) "收起附件" else "添加附件",
             onClick = onAttachClick,
-            size = 64.dp,
+            size = 32.dp,
         ) {
             Box(Modifier.rotate(plusRotation)) {
                 PlusCircleGlyph(color = colors.textPrimary, iconSize = 26.dp)
@@ -377,6 +378,7 @@ private fun ActionRow(
             CircleIconButton(
                 contentDescription = "发送",
                 onClick = onSend,
+                size = 32.dp,
             ) { SendCircleGlyph(background = colors.primary, arrowColor = colors.onPrimary, iconSize = 24.6.dp) }
         } else {
             CircleIconButton(
@@ -386,6 +388,7 @@ private fun ActionRow(
                     "切换到键盘输入"
                 },
                 onClick = onToggleMode,
+                size = 32.dp,
             ) {
                 if (state.mode == InputMode.Text) {
                     VoiceGlyph(color = colors.textPrimary, iconSize = 26.dp)
@@ -397,7 +400,7 @@ private fun ActionRow(
 
         // 第三个位置：模型开始工作后才"新增"出来的暂停按钮（包在 40dp 盒里，与左侧按钮同间距）
         if (generating) {
-            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
                 SendOrStopButton(
                     generating = true,
                     enabled = true,
