@@ -26,6 +26,32 @@ Key 只在创建时完整显示一次，关闭后无法再次查看；如果泄�
 
 ---
 
+## 发布与签名
+
+本地打包（一次配置，长期使用）：
+
+1. 生成 keystore（只做一次，文件放仓库外）：
+   ```bash
+   keytool -genkeypair -v -keystore deepport-release.jks -alias deepport \
+     -keyalg RSA -keysize 2048 -validity 10950
+   ```
+2. 仓库根目录建 `keystore.properties`（已 gitignore，不要提交）：
+   ```
+   storeFile=D:/path/to/deepport-release.jks
+   storePassword=***
+   keyAlias=deepport
+   keyPassword=***
+   ```
+3. `./gradlew :app:assembleRelease`，产物在 `app/build/outputs/apk/release/app-release.apk`。
+   没有 `keystore.properties` 时会自动回退 debug 签名，方便本地验证。
+
+GitHub Actions（`.github/workflows/android.yml`）：
+
+- 触发：push tag `v*`，或在 Actions 页手动 `workflow_dispatch`；
+- Secrets 需要配 4 个：`KEYSTORE_BASE64`（`base64 -w0 deepport-release.jks` 的结果）、`KEYSTORE_PASSWORD`、`KEY_ALIAS`、`KEY_PASSWORD`；
+- 每次构建上传 APK artifact；tag 触发时自动附加到对应 Release。
+---
+
 ## 1. 工具链（已验证可编译）
 
 | 项 | 版本 |

@@ -1,13 +1,35 @@
-﻿plugins {
+import java.util.Properties
+
+plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
 }
 
+// 签名信息放在仓库外的 keystore.properties（已 gitignore）；CI 上由 workflow 生成同名文件
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    // 用 UTF-8 Reader 读取：storeFile 路径含中文，Properties.load(InputStream) 会按 ISO-8859-1 解成乱码
+    if (keystorePropsFile.exists()) keystorePropsFile.reader(Charsets.UTF_8).use { load(it) }
+}
+val hasReleaseSigning = keystorePropsFile.exists() &&
+    !keystoreProps.getProperty("storeFile").isNullOrBlank()
+
 android {
     namespace = "io.github.bancott.deepport"
     compileSdk = 35
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "io.github.bancott.deepport"
@@ -35,6 +57,12 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // 有 keystore.properties 就用正式签名，否则回退 debug 签名（本地也能打出可安装的 release 包）
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

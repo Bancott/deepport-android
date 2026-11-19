@@ -14,3 +14,8 @@ tools/jadx/
 # 构建/工具临时产物
 .kotlin/
 hs_err_pid*.log
+
+# 签名配置（含密钥口令，绝不入库）
+keystore.properties
+*.jks
+*.keystore
