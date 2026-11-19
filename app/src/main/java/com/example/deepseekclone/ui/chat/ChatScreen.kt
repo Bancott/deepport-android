@@ -1,16 +1,15 @@
-﻿package com.example.deepseekclone.ui.chat
+package com.example.deepseekclone.ui.chat
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandIn
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkOut
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -52,6 +51,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import com.example.deepseekclone.R
 import com.example.deepseekclone.ui.common.CircleIconButton
@@ -145,15 +145,13 @@ fun ChatScreen(
         animationSpec = tween(durationMillis = 150, easing = panelEasing),
         label = "panelProgress",
     )
-    // 展开/收起期间都用锁存的键盘高度插值：如果收起时立刻切回 imeBottomPx（通常已经是 0），
-    // 输入栏会在面板退场的第一帧整体下坠，表现就是点“文件”后闪一下。
-    val panelAnimating = attachOpen || panelProgress > 0.001f
-    val padSourcePx = if (panelAnimating) maxOf(lastNonZeroIme, imeBottomPx) else imeBottomPx
+    // 键盘留白补偿：只在「面板展开中」用锁存的键盘高度做过渡（否则输入栏会先掉下去再被面板顶上来）；
+    // 关闭时 keyboard 已经收起，必须按当前 ime（=0）算，否则会把几百 px 的留白重新加回来，
+    // 表现就是收起面板时输入栏先往上弹一下。
+    val padSourcePx = if (panelVisible) maxOf(lastNonZeroIme, imeBottomPx) else imeBottomPx
     val inputBottomPadding = with(density) {
         val gapPx = 8.dp.toPx()
         val extra = (padSourcePx - disclaimerBlockPx).coerceAtLeast(0f)
-        // 间隙连续衰减：原来写成 if (imeBottomPx > 0) 8.dp else 0.dp，
-        // 键盘收到最后一帧时它会从 8dp 直接归零，输入栏会"跳一下"。
         val gap = gapPx * (extra / gapPx).coerceIn(0f, 1f)
         ((extra + gap) * (1f - panelProgress)).toDp()
     }
@@ -280,26 +278,16 @@ fun ChatScreen(
 
             AnimatedVisibility(
                 visible = panelVisible,
-                // 官方 ChatInputActionBarImplV2：入场 expandIn 150 + scaleIn 0.6→1（150）+ fadeIn 110（延迟 40）；
-                // 退场 shrinkOut 110 + scaleOut→0.6（110）+ fadeOut 50；曲线统一 ease-out。
-                enter = expandIn(
-                    animationSpec = tween(150, easing = panelEasing),
-                    clip = false,
-                ) + scaleIn(
-                    initialScale = 0.6f,
-                    animationSpec = tween(150, easing = panelEasing),
-                ) + fadeIn(
-                    animationSpec = tween(110, delayMillis = 40, easing = panelEasing),
-                ),
-                exit = shrinkOut(
-                    animationSpec = tween(110, easing = panelEasing),
-                    clip = false,
-                ) + scaleOut(
-                    targetScale = 0.6f,
-                    animationSpec = tween(110, easing = panelEasing),
-                ) + fadeOut(
-                    animationSpec = tween(50, easing = panelEasing),
-                ),
+                // 只要「高度展开/收起」：面板从输入栏下方长出来，把输入栏自然顶上去；
+                // 关闭时按同一路径收回，不做缩放/横向生长，避免三个块像从左往右冒出来。
+                enter = expandVertically(
+                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                    expandFrom = Alignment.Top,
+                ) + fadeIn(tween(120)),
+                exit = shrinkVertically(
+                    animationSpec = tween(200, easing = FastOutSlowInEasing),
+                    shrinkTowards = Alignment.Top,
+                ) + fadeOut(tween(100)),
             ) {
                 AttachmentPanel(
                     onCamera = {
@@ -317,15 +305,22 @@ fun ChatScreen(
                 )
             }
 
-            // 附件面板展开 / 录音中让位（官方这两块内容都不显示）
-            if (!attachOpen && !voiceRecording) {
+            // 附件面板展开 / 录音中让位（官方这两块内容都不显示）。
+            // 免责声明的收放和面板用同一组时长（展开 220 / 收起 200），两条高度曲线形状一致，
+            // 叠在一起时输入栏只会单调移动，不会先向下再被顶上去。
+            AnimatedVisibility(
+                visible = !attachOpen && !voiceRecording,
+                enter = fadeIn(tween(120)) + expandVertically(tween(200, easing = FastOutSlowInEasing)),
+                exit = fadeOut(tween(120)) + shrinkVertically(tween(220, easing = FastOutSlowInEasing)),
+            ) {
                 Text(
                     text = "回答由 AI 生成，仅供参考",
                     style = DsText.meta.copy(fontSize = 12.sp),
                     color = colors.textTertiary,
                     modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
+                        .fillMaxWidth()
                         .padding(top = DisclaimerBlockTopPadding, bottom = DisclaimerBlockBottomPadding),
+                    textAlign = TextAlign.Center,
                 )
             }
         }
