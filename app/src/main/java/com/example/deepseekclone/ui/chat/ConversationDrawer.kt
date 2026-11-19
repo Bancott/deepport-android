@@ -1,6 +1,9 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -54,6 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -110,57 +115,61 @@ fun ConversationDrawer(
                 // 底部让出系统手势条高度，避免账户名贴住小白条
                 .navigationBarsPadding(),
         ) {
+            // 官方 2.8.0：只有头部在「搜索框 ↔ 多选头」之间做交叉淡入 + 尺寸补间（200ms, ease-in-out），
+            // 列表与底栏是硬切换，没有整块横向滑动。
+            val headerEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
             AnimatedContent(
                 targetState = state.multiSelect,
                 transitionSpec = {
-                    val forward = targetState
-                    val enter = slideInHorizontally(tween(260)) { width -> if (forward) width / 3 else -width / 3 } +
-                        fadeIn(tween(190))
-                    val exit = slideOutHorizontally(tween(260)) { width -> if (forward) -width / 3 else width / 3 } +
-                        fadeOut(tween(150))
-                    enter togetherWith exit
+                    val spec = tween<Float>(200, easing = headerEasing)
+                    (fadeIn(spec) togetherWith fadeOut(spec)) using SizeTransform(
+                        clip = false,
+                        sizeAnimationSpec = { _, _ -> tween(200, easing = headerEasing) },
+                    )
                 },
-                label = "drawerMode",
-                modifier = Modifier.fillMaxSize(),
+                label = "DrawerHeaderTransition",
             ) { multiSelect ->
-                Column(Modifier.fillMaxSize()) {
+                Column {
                     if (multiSelect) {
-                        MultiSelectHeader(onClose = onExitMultiSelect)
+                        MultiSelectHeader(
+                            onClose = onExitMultiSelect,
+                            selectedCount = state.selectedCount,
+                        )
                     } else {
                         Spacer(Modifier.height(8.dp))
                         SearchField(onClick = onSearchClick)
                     }
-
-                    Box(Modifier.weight(1f)) {
-                        if (multiSelect) {
-                            MultiSelectList(
-                                groups = state.groups,
-                                selected = state.selectedIds,
-                                onToggleSelect = onToggleSelect,
-                            )
-                        } else {
-                            ConversationList(
-                                groups = state.groups,
-                                currentId = state.currentId,
-                                onClick = onConversationClick,
-                                onLongPress = onLongPress,
-                                onPin = onPin,
-                                onRename = onRename,
-                                onToggleMultiSelect = onToggleMultiSelect,
-                            )
-                        }
-                    }
-
-                    if (multiSelect) {
-                        MultiSelectBar(
-                            enabled = state.selectedCount > 0,
-                            onPin = onPinSelected,
-                            onDelete = onDeleteSelected,
-                        )
-                    } else {
-                        DrawerFooter(name = state.userName, avatarUrl = state.avatarUrl, onClick = onFooterClick)
-                    }
                 }
+            }
+
+            Box(Modifier.weight(1f)) {
+                if (state.multiSelect) {
+                    MultiSelectList(
+                        groups = state.groups,
+                        selected = state.selectedIds,
+                        onToggleSelect = onToggleSelect,
+                    )
+                } else {
+                    ConversationList(
+                        groups = state.groups,
+                        currentId = state.currentId,
+                        onClick = onConversationClick,
+                        onLongPress = onLongPress,
+                        onPin = onPin,
+                        onRename = onRename,
+                        onToggleMultiSelect = onToggleMultiSelect,
+                    )
+                }
+            }
+
+            if (state.multiSelect) {
+                MultiSelectBar(
+                    enabled = state.selectedCount > 0,
+                    onPin = onPinSelected,
+                    onDelete = onDeleteSelected,
+                )
+            } else {
+                DrawerFooter(name = state.userName, avatarUrl = state.avatarUrl, onClick = onFooterClick)
             }
         }
     }
@@ -246,18 +255,23 @@ private fun SearchField(onClick: () -> Unit) {
 }
 
 @Composable
-private fun MultiSelectHeader(onClose: () -> Unit) {
+private fun MultiSelectHeader(onClose: () -> Unit, selectedCount: Int) {
     val colors = DsTheme.colors
+    // 官方：头高 48dp，标题 17sp / 500；有选中时文案是「已选择 N 个对话」
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(48.dp)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "选择对话",
-            style = DsText.h2.copy(fontSize = 20.sp),
+            text = if (selectedCount > 0) "已选择 $selectedCount 个对话" else "选择对话",
+            style = DsText.h2.copy(
+                fontSize = 17.sp,
+                lineHeight = 26.sp,
+                fontWeight = FontWeight.Medium,
+            ),
             color = colors.textPrimary,
             modifier = Modifier.weight(1f),
         )
@@ -506,28 +520,62 @@ private fun MultiSelectList(
             }
             items(group.items, key = { "m-${it.id}" }) { conversation ->
                 val isSelected = conversation.id in selected
+                // 官方 2.8.0：勾选框 alpha 0→1、标题右移 0→30dp，均 200ms ease-in-out，无逐项延迟
+                val rowEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+                val checkAlpha by animateFloatAsState(
+                    targetValue = if (isSelected) 1f else 0f,
+                    animationSpec = tween(200, easing = rowEasing),
+                    label = "checkboxAlpha",
+                )
+                val titleShift by animateFloatAsState(
+                    targetValue = if (isSelected) 30f else 0f,
+                    animationSpec = tween(200, easing = rowEasing),
+                    label = "titleShift",
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
-                        .clickable(role = Role.Checkbox) { onToggleSelect(conversation) }
-                        .padding(horizontal = 22.dp),
+                        .height(RowHeight)
+                        .padding(horizontal = RowInset)
+                        .background(
+                            color = if (isSelected) colors.primary.copy(alpha = 0.12f) else Color.Transparent,
+                            shape = RoundedCornerShape(RowCorner),
+                        )
+                        .clickable(role = Role.Checkbox) {
+                            onToggleSelect(conversation)
+                        }
+                        .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         modifier = Modifier
                             .size(20.dp)
+                            .alpha(checkAlpha)
                             .clip(CircleShape)
                             .border(1.5.dp, if (isSelected) colors.primary else colors.textTertiary, CircleShape)
                             .background(if (isSelected) colors.primary else Color.Transparent),
-                    )
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (isSelected) {
+                            SvgIcon(
+                                R.drawable.ic_checked_filled_16,
+                                tint = colors.onPrimary,
+                                size = 12.dp,
+                            )
+                        }
+                    }
                     Spacer(Modifier.width(16.dp))
                     Text(
                         text = conversation.title,
-                        style = DsText.label,
+                        style = DsText.label.copy(
+                            fontSize = RowTitleSize,
+                            lineHeight = RowTitleLineHeight,
+                            letterSpacing = 0.sp,
+                        ),
                         color = colors.textPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.offset(x = titleShift.dp),
                     )
                 }
             }
@@ -553,7 +601,7 @@ private fun MultiSelectBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .height(61.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
