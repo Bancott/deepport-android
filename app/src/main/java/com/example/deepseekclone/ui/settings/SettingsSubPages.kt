@@ -340,9 +340,57 @@ fun DataScreen(
 fun PersonalizationScreen(
     autoCollapse: Boolean,
     onAutoCollapseChange: (Boolean) -> Unit,
+    roleDefinition: String,
+    onRoleDefinitionChange: (String) -> Unit,
+    temperature: Float,
+    onTemperatureChange: (Float) -> Unit,
+    thinkingEffort: Int,
+    onThinkingEffortChange: (Int) -> Unit,
+    darkTheme: Boolean,
     onBack: () -> Unit,
 ) {
+    var showRole by remember { mutableStateOf(false) }
+    var showTemperature by remember { mutableStateOf(false) }
+    var showEffort by remember { mutableStateOf(false) }
+
+    val role = roleDefinition.trim()
+    val roleSummary = when {
+        role.isEmpty() -> "未设置"
+        role.length > 10 -> role.take(10) + "…"
+        else -> role
+    }
+    val effortOptions = listOf("0" to "低", "1" to "中", "2" to "高")
+    val effortLabel = effortOptions.firstOrNull { it.first == thinkingEffort.toString() }?.second ?: "中"
+    val tempLabel = String.format(java.util.Locale.CHINA, "%.1f", temperature)
+
     SettingsSubPage("个性化", onBack) {
+        SectionLabel("对话")
+        Card {
+            RowItem(
+                title = "角色定义",
+                value = roleSummary,
+                onClick = { showRole = true },
+            )
+        }
+        Caption("为助手设定身份、语气或边界，会附加在系统提示末尾")
+
+        SectionLabel("生成参数")
+        Card {
+            RowItem(
+                title = "温度",
+                value = tempLabel,
+                onClick = { showTemperature = true },
+            )
+            Divider()
+            RowItem(
+                title = "思考强度",
+                value = effortLabel,
+                onClick = { showEffort = true },
+            )
+        }
+        Caption("温度越高回答越发散；思考强度决定开启深度思考时的推理预算（低 1k / 中 4k / 高 8k）")
+
+        SectionLabel("思考内容")
         Card {
             RowItem(
                 title = "思考内容自动折叠",
@@ -351,6 +399,36 @@ fun PersonalizationScreen(
             )
         }
         Caption("开启后，思考结束后将自动折叠思考内容")
+    }
+
+    if (showRole) {
+        RoleDefinitionDialog(
+            initial = roleDefinition,
+            darkTheme = darkTheme,
+            onConfirm = { onRoleDefinitionChange(it); showRole = false },
+            onDismiss = { showRole = false },
+        )
+    }
+    if (showTemperature) {
+        TemperatureDialog(
+            initial = temperature,
+            darkTheme = darkTheme,
+            onConfirm = { onTemperatureChange(it); showTemperature = false },
+            onDismiss = { showTemperature = false },
+        )
+    }
+    if (showEffort) {
+        SingleChoiceDialog(
+            title = "思考强度",
+            options = effortOptions,
+            selected = thinkingEffort.toString(),
+            darkTheme = darkTheme,
+            onSelect = {
+                onThinkingEffortChange(it.toIntOrNull() ?: 1)
+                showEffort = false
+            },
+            onDismiss = { showEffort = false },
+        )
     }
 }
 

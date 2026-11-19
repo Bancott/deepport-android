@@ -405,6 +405,13 @@ private fun App(isDark: Boolean) {
         Screen.Personalization -> PersonalizationScreen(
             autoCollapse = store.autoCollapseReasoning,
             onAutoCollapseChange = { store.updateAutoCollapseReasoning(it) },
+            roleDefinition = store.roleDefinition,
+            onRoleDefinitionChange = { store.updateRoleDefinition(it) },
+            temperature = store.temperature,
+            onTemperatureChange = { store.updateTemperature(it) },
+            thinkingEffort = store.thinkingEffort,
+            onThinkingEffortChange = { store.updateThinkingEffort(it) },
+            darkTheme = isDark,
             onBack = { navBack() },
         )
 

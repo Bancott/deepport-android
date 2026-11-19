@@ -54,13 +54,25 @@ class DeepSeekApi {
         search: Boolean,
         requestTitle: Boolean,
         system: String = systemPrompt(),
+        /** 采样温度 0–2，来自「个性化 → 温度」 */
+        temperature: Float = 1.0f,
+        /** 深度思考的推理预算，来自「个性化 → 思考强度」 */
+        thinkingBudget: Int? = null,
     ): Flow<ApiEvent> = flow {
         val url = trimOrigin(origin) + "/anthropic/v1/messages"
         val body = JSONObject().apply {
             put("model", model)
             put("stream", true)
             put("system", system)
-            put("thinking", JSONObject().put("type", if (thinking) "enabled" else "disabled"))
+            put("temperature", temperature.toDouble())
+            put(
+                "thinking",
+                JSONObject().apply {
+                    put("type", if (thinking) "enabled" else "disabled")
+                    // 思考强度：只在开启思考时带预算，关闭时不传
+                    if (thinking && thinkingBudget != null) put("budget_tokens", thinkingBudget)
+                },
+            )
             put("safety_check", JSONObject().put("level", "high"))
             // 阅读链接常开；智能搜索开关只决定是否再声明搜索工具（与官方 chat-demo 一致）
             put(
@@ -510,7 +522,15 @@ class DeepSeekApi {
         }
 
         /** system 提示 = 身份说明 + 时间锚点（日期/星期/地点/平台/语言） */
-        fun systemPrompt(): String = SYSTEM_PROMPT + "\n当前时间：" + reminderLine() + "。"
+        /**
+         * system 提示 = 身份说明 + 时间锚点 +（可选）用户在「个性化」里写的角色定义。
+         * 角色定义放在最后，优先级高于前面的固定文案。
+         */
+        fun systemPrompt(roleDefinition: String = ""): String {
+            val base = SYSTEM_PROMPT + "\n当前时间：" + reminderLine() + "。"
+            val role = roleDefinition.trim()
+            return if (role.isEmpty()) base else base + "\n\n" + role
+        }
         /** 图片不传 purpose；PDF / Word / PPT 需要服务端做版面识别，其余按纯数据上传 */
         fun purposeFor(name: String, isImage: Boolean): String? = when {
             isImage -> null

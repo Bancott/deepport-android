@@ -753,6 +753,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 // 智能搜索开关 → tools[deepseek_web_search]（deepseek_read_url 常开）
                 enableSearch = enableSearch,
                 requestTitle = requestTitle,
+                // 个性化：角色定义（system 提示）、温度、思考强度（推理预算）
+                system = com.example.deepseekclone.data.DeepSeekApi.systemPrompt(settings.roleDefinition),
+                temperature = settings.temperature,
+                thinkingBudget = settings.thinkingBudgetTokens(),
             ).collect { event ->
                 when (event) {
                     is StreamEvent.Reasoning -> {

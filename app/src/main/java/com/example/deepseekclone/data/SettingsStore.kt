@@ -34,6 +34,18 @@ class SettingsStore private constructor(context: Context) {
     var autoCollapseReasoning by mutableStateOf(prefs.getBoolean(KEY_AUTO_COLLAPSE, true))
         private set
 
+    /** 个性化：角色定义（附加到 system 提示的自定义身份/语气/约束） */
+    var roleDefinition by mutableStateOf(prefs.getString(KEY_ROLE, "").orEmpty())
+        private set
+
+    /** 个性化：采样温度 0.0–2.0，默认 1.0 */
+    var temperature by mutableStateOf(prefs.getFloat(KEY_TEMPERATURE, 1.0f))
+        private set
+
+    /** 个性化：思考强度 0=低 1=中 2=高（深度思考开启时的推理预算） */
+    var thinkingEffort by mutableStateOf(prefs.getInt(KEY_THINKING_EFFORT, 1))
+        private set
+
     var model by mutableStateOf(
         prefs.getString(KEY_MODEL, "").orEmpty(),
     )
@@ -90,6 +102,28 @@ class SettingsStore private constructor(context: Context) {
         prefs.edit().putBoolean(KEY_AUTO_COLLAPSE, value).apply()
     }
 
+    fun updateRoleDefinition(value: String) {
+        roleDefinition = value
+        prefs.edit().putString(KEY_ROLE, value).apply()
+    }
+
+    fun updateTemperature(value: Float) {
+        temperature = value.coerceIn(0f, 2f)
+        prefs.edit().putFloat(KEY_TEMPERATURE, temperature).apply()
+    }
+
+    fun updateThinkingEffort(value: Int) {
+        thinkingEffort = value.coerceIn(0, 2)
+        prefs.edit().putInt(KEY_THINKING_EFFORT, thinkingEffort).apply()
+    }
+
+    /** 思考强度 → thinking.budget_tokens（官方 Anthropic 兼容接口用预算控制推理长度） */
+    fun thinkingBudgetTokens(): Int = when (thinkingEffort) {
+        0 -> 1024
+        2 -> 8192
+        else -> 4096
+    }
+
     fun updateModel(value: String) {
         model = value
         persist()
@@ -140,6 +174,9 @@ class SettingsStore private constructor(context: Context) {
         private const val KEY_THEME = "theme_mode"
         private const val KEY_FONT = "font_scale"
         private const val KEY_AUTO_COLLAPSE = "auto_collapse_reasoning"
+        private const val KEY_ROLE = "role_definition"
+        private const val KEY_TEMPERATURE = "temperature"
+        private const val KEY_THINKING_EFFORT = "thinking_effort"
         private const val KEY_TTS_VOICE = "tts_voice"
     }
 }

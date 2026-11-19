@@ -37,6 +37,9 @@ class ChatRepository(
         thinking: Boolean,
         enableSearch: Boolean,
         requestTitle: Boolean,
+        system: String = DeepSeekApi.systemPrompt(),
+        temperature: Float = 1.0f,
+        thinkingBudget: Int? = null,
     ): Flow<StreamEvent> = api.streamMessage(
         origin = baseUrl,
         apiKey = apiKey,
@@ -45,6 +48,9 @@ class ChatRepository(
         thinking = thinking,
         search = enableSearch,
         requestTitle = requestTitle,
+        system = system,
+        temperature = temperature,
+        thinkingBudget = thinkingBudget,
     ).map { event ->
         when (event) {
             is ApiEvent.Thinking -> StreamEvent.Reasoning(event.delta)
