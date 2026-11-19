@@ -52,6 +52,12 @@ GitHub Actions（`.github/workflows/android.yml`）：
 - 每次构建上传 APK artifact；tag 触发时自动附加到对应 Release。
 ---
 
+## 许可
+
+- 本项目代码以 [MIT](LICENSE) 发布，© 2026 Bancott：可自由使用、修改、分发与商用，需保留版权与许可声明；
+- MIT **不涵盖** DeepSeek 的名称、商标、图标及官方资源，这些权利归杭州深度求索人工智能基础技术研究有限公司所有。本项目为非官方第三方客户端，与官方无隶属关系；
+- 第三方组件均为 Apache-2.0：Jetpack Compose / AndroidX、Room、Lottie for Android、AndroidX Browser。
+
 ## 1. 工具链（已验证可编译）
 
 | 项 | 版本 |

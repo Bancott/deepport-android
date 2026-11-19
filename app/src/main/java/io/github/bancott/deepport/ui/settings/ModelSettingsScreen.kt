@@ -1,4 +1,4 @@
-﻿package io.github.bancott.deepport.ui.settings
+package io.github.bancott.deepport.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -246,16 +246,6 @@ fun ModelSettingsScreen(
             )
         }
     }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = DsText.caption,
-        color = DsTheme.colors.textSecondary,
-        modifier = Modifier.padding(start = 32.dp, top = 20.dp, bottom = 8.dp),
-    )
 }
 
 @Composable

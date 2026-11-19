@@ -113,16 +113,6 @@ fun SettingsSubPage(
 }
 
 @Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = DsText.caption,
-        color = DsTheme.colors.textSecondary,
-        modifier = Modifier.padding(start = 32.dp, top = 20.dp, bottom = 8.dp),
-    )
-}
-
-@Composable
 private fun Card(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,

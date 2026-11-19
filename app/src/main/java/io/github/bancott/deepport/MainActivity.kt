@@ -63,6 +63,7 @@ import io.github.bancott.deepport.ui.chat.SearchScreen
 import io.github.bancott.deepport.ui.chat.rememberVoiceInput
 import io.github.bancott.deepport.ui.web.WebScreen
 import io.github.bancott.deepport.ui.web.openInBrowserTab
+import io.github.bancott.deepport.ui.settings.AboutScreen
 import io.github.bancott.deepport.ui.settings.AccountScreen
 import io.github.bancott.deepport.ui.settings.AppearanceOptions
 import io.github.bancott.deepport.ui.settings.FontSizeScreen
@@ -120,7 +121,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Chat, Search, Settings, Model, Account, Data, Personalization, FontSize, Help }
+private enum class Screen { Chat, Search, Settings, Model, Account, Data, Personalization, FontSize, Help, About }
 
 /**
  * 导航栈的一层。抽屉展开状态记在这一层上：
@@ -423,6 +424,23 @@ private fun App(isDark: Boolean) {
 
         Screen.Help -> HelpScreen(onBack = { navBack() })
 
+        Screen.About -> AboutScreen(
+            versionName = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})",
+            darkTheme = isDark,
+            onBack = { navBack() },
+            onOpenGitHub = {
+                openInBrowserTab(
+                    context = context,
+                    url = "https://github.com/Bancott/deepport-android",
+                    toolbarColor = browserChromeColor,
+                )
+            },
+            onOpenHelp = { navPush(Screen.Help) },
+            onOpenAgreement = {
+                webTarget = "https://cdn.deepseek.com/policies/zh-CN/deepseek-terms-of-use.html" to "服务协议"
+            },
+        )
+
         Screen.Model -> ModelSettingsScreen(
             store = store,
             onBack = { navBack() },
@@ -447,6 +465,7 @@ private fun App(isDark: Boolean) {
             onVoiceTone = { showVoiceTone = true },
             onAgreement = { webTarget = "https://cdn.deepseek.com/policies/zh-CN/deepseek-terms-of-use.html" to "服务协议" },
             onHelp = { navPush(Screen.Help) },
+            onAbout = { navPush(Screen.About) },
             // 充值要走「真浏览器」：支付 scheme 唤起、return_url 回跳、浏览器 Cookie 仓都只有
             // Custom Tabs / 系统浏览器具备，内置 WebView 里付不出去（详见 WebScreen 顶部说明）。
             onRecharge = {

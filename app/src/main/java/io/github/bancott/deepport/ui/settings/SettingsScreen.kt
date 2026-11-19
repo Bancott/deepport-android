@@ -1,4 +1,4 @@
-﻿package io.github.bancott.deepport.ui.settings
+package io.github.bancott.deepport.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -57,6 +57,7 @@ fun SettingsScreen(
     onCheckUpdate: () -> Unit = {},
     onAgreement: () -> Unit = {},
     onHelp: () -> Unit = {},
+    onAbout: () -> Unit = {},
     onLogout: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -132,6 +133,7 @@ fun SettingsScreen(
             SettingsGroup {
                 SettingsRow(R.drawable.ic_info_outline, "检查更新", value = versionName, onClick = onCheckUpdate)
                 SettingsRow(R.drawable.ic_list_pen_regular, "服务协议", onClick = onAgreement)
+                SettingsRow(R.drawable.ic_info_outline_16, "关于 DeepPort", onClick = onAbout)
             }
 
             Spacer(Modifier.height(12.dp))
@@ -145,7 +147,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     val colors = DsTheme.colors
     Text(
         text = text,
@@ -156,7 +158,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun SettingsGroup(content: @Composable () -> Unit) {
+internal fun SettingsGroup(content: @Composable () -> Unit) {
     val colors = DsTheme.colors
     Surface(
         modifier = Modifier
@@ -170,7 +172,7 @@ private fun SettingsGroup(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SettingsRow(
+internal fun SettingsRow(
     @DrawableRes iconRes: Int,
     title: String,
     value: String? = null,
