@@ -101,7 +101,8 @@ val DsDarkColors = DsColors(
     switchOn = Color(0xFF5CC368),
     toast = Color(0xFF47484A),
     drawerSurface = Color(0xFF0F0F0F),
-    pushedPage = Color(0xFF1D1D1D),
+    // 官方开态卡片复合底色实测 29（#1D）= 洗淡 0.45 合成的结果，卡面本身取 #282828
+    pushedPage = Color(0xFF282828),
     tile = Color(0xFF3C3C3C),
     voiceCard = Color(0xFF24304A),
 )

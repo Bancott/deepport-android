@@ -1,8 +1,7 @@
 package com.example.deepseekclone.ui.chat
 
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,12 +36,6 @@ import androidx.compose.ui.unit.dp
 import com.example.deepseekclone.ui.theme.DsTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlin.math.pow
-
-private const val LAG_POWER = 2.2f
-
-/** 手指位移 → 露出比例的换算长度：约 200dp 行程即可全开 */
-private const val DRAG_SPAN_RATIO = 0.5f
 
 /** 快速甩动的速度阈值（px/s），超过则不看距离直接朝该方向吸附 */
 private const val FLING_VELOCITY = 700f
@@ -50,10 +43,12 @@ private const val FLING_VELOCITY = 700f
 /**
  * 官方抽屉动画（推页式）。层级：**抽屉在底层，会话页作为卡片浮在上面**。
  *
+ * - 拖拽 **1:1 线性跟手**（Material3 AnchoredDraggable 语义），页面与抽屉同步移动、无滞后；
  * - 抽屉从左侧滑入（-W → 0）；
- * - 会话页右移、缩小到 0.93、内容淡到 38%、20dp 圆角、左缘 1dp 高光；
- * - 页面位移用 p^2.2（比抽屉慢半拍），抽屉像是从页面身后露出来；
- * - 松手吸附：**速度优先**（快速甩动按方向切换），否则看谁占的面积大。
+ * - 会话页右移、缩小到 0.95、内容洗淡到 45%（深）/25%（浅）、20dp 圆角、左缘 1dp 高光；
+ * - 抽屉面在滑出过程中压一层 (1−p)×0.2 黑纱，全开时褪尽（官方 ij7 case2 的 ContentScrim）；
+ * - 松手吸附：spring(damping 0.9, stiffness 1500)（官方 mj7.a），**速度优先**（快速甩动按方向切换），
+ *   否则看进度是否过半。
  */
 @Composable
 fun PushDrawerLayout(
@@ -75,13 +70,14 @@ fun PushDrawerLayout(
     // 只在跨越阈值时重组一次，避免动画期间每帧重组整个会话页（卡顿根因）
     val pageLifted = remember { derivedStateOf { progress > 0.01f } }
 
-    fun animateProgressTo(target: Float, duration: Int = 280) {
+    fun animateProgressTo(target: Float) {
         animJob?.cancel()
         animJob = scope.launch {
+            // 官方收尾是弹簧物理（spring damping 0.9 / stiffness 1500，mj7.a），没有固定毫秒数
             animate(
                 initialValue = progress,
                 targetValue = target,
-                animationSpec = tween(durationMillis = duration, easing = FastOutSlowInEasing),
+                animationSpec = spring(dampingRatio = 0.9f, stiffness = 1500f),
             ) { value, _ -> progress = value }
         }
     }
@@ -100,8 +96,6 @@ fun PushDrawerLayout(
         val density = LocalDensity.current
         val drawerWidth = maxWidth * drawerWidthFraction
         val drawerWidthPx = with(density) { drawerWidth.toPx() }
-        val screenWidthPx = with(density) { maxWidth.toPx() }
-        val dragSpanPx = screenWidthPx * DRAG_SPAN_RATIO
         // 每帧都要用的量提前算好，别把 dp→px 的密度查找带进绘制阶段
         val pageTravelPx = with(density) { (drawerWidth - 10.dp).toPx() }
         val liftedShape = remember { RoundedCornerShape(20.dp) }
@@ -109,7 +103,7 @@ fun PushDrawerLayout(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(drawerOpen, dragSpanPx) {
+                .pointerInput(drawerOpen, pageTravelPx) {
                     var dragging = false
 
                     fun settle(open: Boolean) {
@@ -117,7 +111,7 @@ fun PushDrawerLayout(
                         onDrawerOpenChange(open)
                         if (!stateChanged) {
                             // 状态没变时 LaunchedEffect 不会触发，这里手动收尾
-                            animateProgressTo(if (open) 1f else 0f, duration = 240)
+                            animateProgressTo(if (open) 1f else 0f)
                         }
                     }
 
@@ -126,7 +120,7 @@ fun PushDrawerLayout(
                         return when {
                             vx > FLING_VELOCITY -> true
                             vx < -FLING_VELOCITY -> false
-                            else -> progress.pow(LAG_POWER) > 0.5f
+                            else -> progress > 0.5f
                         }
                     }
 
@@ -140,9 +134,8 @@ fun PushDrawerLayout(
                             if (dragging) {
                                 change.consume()
                                 velocityTracker.addPosition(change.uptimeMillis, change.position)
-                                // 手指位移按增益映射到"露出比例"，再反推动画进度
-                                val revealed = progress.pow(LAG_POWER) + dragAmount / dragSpanPx
-                                progress = revealed.coerceIn(0f, 1f).pow(1f / LAG_POWER)
+                                // 1:1 线性跟手：手指位移直接换算成页面行程，无增益、无滞后（官方 AnchoredDraggable 语义）
+                                progress = (progress + dragAmount / pageTravelPx).coerceIn(0f, 1f)
                             }
                         },
                         onDragEnd = {
@@ -153,7 +146,7 @@ fun PushDrawerLayout(
                         },
                         onDragCancel = {
                             dragging = false
-                            settle(progress.pow(LAG_POWER) > 0.5f)
+                            settle(progress > 0.5f)
                         },
                     )
                 },
@@ -169,6 +162,14 @@ fun PushDrawerLayout(
             ) {
                 drawer(Modifier.fillMaxSize())
 
+                // 抽屉面黑纱：滑出过程中压 (1−p)×0.2，全开时褪尽（官方 ContentScrim 的黑罩，
+                // 颜色固定、alpha 交给 graphicsLayer，避免每帧重组）
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = (1f - progress) * 0.2f }
+                        .background(Color.Black),
+                )
             }
 
             /* ---------- 2. 会话页（上层卡片） ---------- */
@@ -177,9 +178,9 @@ fun PushDrawerLayout(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        val pageP = progress.pow(LAG_POWER)
-                        translationX = pageTravelPx * pageP
-                        val s = 1f - 0.052f * pageP
+                        // 线性 1:1：页面与手指同速，不再做幂滞后
+                        translationX = pageTravelPx * progress
+                        val s = 1f - 0.05f * progress
                         scaleX = s
                         scaleY = s
                         clip = pageLifted.value
@@ -191,8 +192,8 @@ fun PushDrawerLayout(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            val pageP = progress.pow(LAG_POWER)
-                            alpha = if (isLight) 1f - 0.75f * pageP else 1f - 0.62f * pageP
+                            // 官方内容洗淡：深色收尾 ≈0.45、浅色 ≈0.25（录屏实测文字 249→138、底色 15→29）
+                            alpha = if (isLight) 1f - 0.75f * progress else 1f - 0.55f * progress
                         },
                 ) {
                     content()
@@ -220,8 +221,8 @@ fun PushDrawerLayout(
                     modifier = Modifier
                         .fillMaxSize()
                         // 只做绘制平移，避免每帧全屏重新布局；
-                        // graphicsLayer 的矩阵会参与坐标换算，点击热区依旧跟着卡片走
-                        .graphicsLayer { translationX = drawerWidthPx * progress }
+                        // graphicsLayer 的矩阵会参与坐标换算，点击热区跟着卡片走（同一条行程）
+                        .graphicsLayer { translationX = pageTravelPx * progress }
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
