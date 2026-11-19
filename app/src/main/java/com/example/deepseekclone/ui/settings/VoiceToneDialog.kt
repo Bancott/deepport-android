@@ -1,4 +1,4 @@
-﻿package com.example.deepseekclone.ui.settings
+package com.example.deepseekclone.ui.settings
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
@@ -173,6 +173,9 @@ fun VoiceToneDialog(
                 }
             }
 
+            // 官方：胶囊顶边在内容区 145dp（整面板 201dp = 56dp 顶栏 + 145dp）
+            Spacer(Modifier.height(145.dp))
+
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val side = ((maxWidth - CapsuleWidth) / 2).coerceAtLeast(0.dp)
                 HorizontalPager(
@@ -288,8 +291,12 @@ private fun AgslFluidCapsule(modifier: Modifier = Modifier, voice: VoiceTone) {
         context.resources.openRawResource(R.raw.fluid_blob).bufferedReader().use { it.readText() }
     }
     // 着色器编译失败时回退到渐变实现，避免个别 ROM 上直接崩
-    val shader = remember(source) { runCatching { RuntimeShader(source) }.getOrNull() } ?: return
-    
+    val shader = remember(source) { runCatching { RuntimeShader(source) }.getOrNull() }
+    if (shader == null) {
+        GradientFluidCapsule(modifier = modifier, voice = voice)
+        return
+    }
+
     val transition = rememberInfiniteTransition(label = "fluid")
     // 官方 time = 0.8/100 × 秒；用 125s 走满 1.0 的循环来供给，避免每帧读系统时钟
     val clock by transition.animateFloat(
@@ -302,9 +309,11 @@ private fun AgslFluidCapsule(modifier: Modifier = Modifier, voice: VoiceTone) {
         label = "fluidClock",
     )
     Canvas(modifier = modifier) {
-        shader.setColorUniform("color1", voice.palette[0].toArgb())
-        shader.setColorUniform("color2", voice.palette[1].toArgb())
-        shader.setColorUniform("color3", voice.palette[2].toArgb())
+        // AGSL 里是 `uniform float4 colorN;`（不是 layout(color)），只能用 float 通道设置；
+        // 用 setColorUniform 会抛 "attempting to set a color uniform using the non-color specific APIs"
+        shader.setFloatUniform("color1", voice.palette[0].red, voice.palette[0].green, voice.palette[0].blue, 1f)
+        shader.setFloatUniform("color2", voice.palette[1].red, voice.palette[1].green, voice.palette[1].blue, 1f)
+        shader.setFloatUniform("color3", voice.palette[2].red, voice.palette[2].green, voice.palette[2].blue, 1f)
         shader.setFloatUniform("resolution", size.width, size.height)
         shader.setFloatUniform("offset", 0f, 0.8f)
         shader.setFloatUniform("time", clock * 0.008f)
