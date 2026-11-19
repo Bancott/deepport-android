@@ -81,7 +81,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import kotlinx.coroutines.delay
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -96,6 +95,7 @@ import com.example.deepseekclone.R
 import com.example.deepseekclone.ui.common.CircleIconButton
 import com.example.deepseekclone.ui.common.SvgIcon
 import com.example.deepseekclone.ui.theme.DsText
+import com.example.deepseekclone.ui.theme.DsDarkColors
 import com.example.deepseekclone.ui.theme.DsTheme
 
 /**
@@ -376,10 +376,12 @@ private fun ConversationList(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(RowHeight)
+                            .padding(start = 10.dp, end = RowEnd)
+                            // 锚点取「高亮行」的矩形（padding 之后），菜单右缘才能对齐行的右缘；
+                            // 之前挂在 padding 之前，会多出一个 RowEnd 的偏移，菜单整体偏右。
                             .onGloballyPositioned {
                                 rowRect = it.boundsInWindow()
                             }
-                            .padding(start = 10.dp, end = RowEnd)
                             // 不用 clip：行尾三点要略微越过圆角背景，才能和底部账户行的三点
                             // 落在同一条竖线上；圆角交给 background 的 shape 自己画
                             .background(
@@ -459,13 +461,16 @@ private fun ConversationList(
                                     modifier = Modifier.weight(1f),
                                 )
                             }
-                            // 三点：点它和长按一样进二级菜单；多选模式下仅作摆设（行点击=切换选中）
+                            // 三点：点它和长按一样进二级菜单；多选模式下仅作摆设（行点击=切换选中）。
+                            // 官方没有圆形波纹反馈，这里去掉 indication（否则会闪一下灰色圆）。
                             Box(
                                 modifier = Modifier
                                     .size(34.dp)
                                     .clip(CircleShape)
                                     .clickable(
                                         enabled = !multiSelect,
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
                                         role = Role.Button,
                                     ) { menuTarget = conversation },
                                 contentAlignment = Alignment.CenterEnd,
@@ -540,8 +545,8 @@ private class SessionMenuPositionProvider(
 
 /**
  * 会话二级菜单：自绘 Popup。
- * 进入 scale 0.8→1（spring 0.75 / 3000），退出 spring(1.0 / 10000)，**没有 fade**；
- * 缩放原点在「贴着行的那条边」——贴行下方时是顶边中点，贴行上方时是底边（行不够宽则靠右）。
+ * 进入 scale 0.8→1（spring 0.75 / 3000）；**关闭不做动画**——点外部/菜单项立即消失，
+ * 避免"缩一下再消失"的顿挫感（用户实测要求）。
  */
 @Composable
 private fun SessionMenu(
@@ -554,25 +559,14 @@ private fun SessionMenu(
     onDelete: (ConversationUi) -> Unit,
 ) {
     val colors = DsTheme.colors
-    var shown by remember { mutableStateOf(false) }
+    var appeared by remember { mutableStateOf(false) }
     var menuSize by remember { mutableStateOf(IntSize.Zero) }
-    LaunchedEffect(Unit) { shown = true }
+    LaunchedEffect(Unit) { appeared = true }
     val scale by animateFloatAsState(
-        targetValue = if (shown) 1f else 0.8f,
-        animationSpec = if (shown) {
-            spring(dampingRatio = 0.75f, stiffness = 3000f)
-        } else {
-            spring(dampingRatio = 1f, stiffness = 10000f)
-        },
+        targetValue = if (appeared) 1f else 0.8f,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 3000f),
         label = "sessionMenuScale",
     )
-    // 退出先把 0.8 的收缩动画走完，再真正移除菜单
-    LaunchedEffect(shown) {
-        if (!shown) {
-            delay(90)
-            onDismiss()
-        }
-    }
     val above = anchor.top.toInt() - menuSize.height >= 180
     val origin = when {
         !above -> TransformOrigin(0.5f, 0f)
@@ -583,7 +577,7 @@ private fun SessionMenu(
     val gapPx = with(LocalDensity.current) { 8.dp.toPx().toInt() }
     Popup(
         popupPositionProvider = SessionMenuPositionProvider(anchor, gapPx),
-        onDismissRequest = { shown = false },
+        onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
         Surface(
@@ -602,20 +596,20 @@ private fun SessionMenu(
         ) {
             // 实测菜单无竖向内边距：4×48dp 项 + 1dp 分隔线 = 193dp（项目此前多加了上下 16dp）
             Column {
-                SessionMenuItem("重命名", R.drawable.ic_edit_outline_20) { shown = false; onRename(target) }
+                SessionMenuItem("重命名", R.drawable.ic_edit_outline_20) { onDismiss(); onRename(target) }
                 SessionMenuDivider()
                 SessionMenuItem(
                     if (target.pinned) "取消置顶" else "置顶",
                     if (target.pinned) R.drawable.ic_unpin_outline_20 else R.drawable.ic_pin_outline_20,
-                ) { shown = false; onPin(target) }
+                ) { onDismiss(); onPin(target) }
                 SessionMenuDivider()
                 SessionMenuItem("多选", R.drawable.ic_checklist_outline_16) {
-                    shown = false
+                    onDismiss()
                     onToggleMultiSelect()
                 }
                 SessionMenuDivider()
                 SessionMenuItem("删除", R.drawable.ic_trash_outline_20, danger = true) {
-                    shown = false
+                    onDismiss()
                     onDelete(target)
                 }
             }
@@ -625,11 +619,15 @@ private fun SessionMenu(
 
 @Composable
 private fun SessionMenuDivider() {
+    val colors = DsTheme.colors
+    // 深色主题的 outline 与 surface3 同为 #333333，直接用它画线等于没有；
+    // 这里按「文字色 8%/6% 叠一层」画一条真正的细线。
+    val alpha = if (colors === DsDarkColors) 0.08f else 0.06f
     Box(
         Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(DsTheme.colors.outline),
+            .background(colors.textPrimary.copy(alpha = alpha)),
     )
 }
 
