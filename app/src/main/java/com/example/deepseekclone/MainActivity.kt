@@ -233,7 +233,11 @@ private fun App(isDark: Boolean) {
     // 手势结束（完成/取消）后把进度平滑归零：页面“松手回弹/收回”，不瞬跳
     LaunchedEffect(settleEpoch) {
         if (settleEpoch > 0 && backProgress > 0f) {
-            animate(backProgress, 0f, tween(220)) { v, _ -> backProgress = v }
+            animate(
+                initialValue = backProgress,
+                targetValue = 0f,
+                animationSpec = tween(220),
+            ) { v, _ -> backProgress = v }
         }
     }
 
