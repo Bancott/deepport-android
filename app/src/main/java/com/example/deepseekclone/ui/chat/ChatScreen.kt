@@ -272,7 +272,13 @@ fun ChatScreen(
                 onVoiceStart = onVoiceStart,
                 onVoiceCancelChange = onVoiceCancelChange,
                 onVoiceEnd = onVoiceEnd,
-                onSend = onSend,
+                // 发送后如果输入栏是被顶起来的状态（键盘弹着 / 附件面板展开），先收起再发，
+                // 让消息列表立刻占满下半屏，而不是停在半截。
+                onSend = {
+                    if (attachOpen) attachOpen = false
+                    focusManager.clearFocus()
+                    onSend()
+                },
                 onStop = onStop,
             )
 
