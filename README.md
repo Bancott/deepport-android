@@ -1,4 +1,4 @@
-# DeepPort · 第三方 DeepSeek 客户端（Android）
+﻿# DeepPort · 第三方 DeepSeek 客户端（Android）
 
 > **本项目为第三方开发者作品，基于 DeepSeek 开放 API 构建，并非 DeepSeek 官方产品，也不代表官方立场。**
 > 应用本身免费，但调用模型需要你自备 API Key（由服务商按量计费）。请认准官网 deepseek.com，不要在其他网站输入密钥或付款。
@@ -44,12 +44,12 @@ Key 只在创建时完整显示一次，关闭后无法再次查看；如果泄�
 ```powershell
 $env:JAVA_HOME = "D:\tools\jdk17\jdk-17.0.21.0.2+1"
 & "$env:USERPROFILE\.gradle\wrapper\dists\gradle-8.14-all\28mvdsg72witjywy1exbbuc46\gradle-8.14\bin\gradle.bat" `
-  -p "D:\深度求索\DeepPort" :app:assembleDebug
+  -p "<项目目录>" :app:assembleDebug
 ```
 
 产物：`app/build/outputs/apk/debug/app-debug.apk`
 
-Android Studio：直接 `File > Open` 选择 `DeepPort` 目录，Sync 后运行即可。
+Android Studio：直接 `File > Open` 选择项目根目录，Sync 后运行即可。
 
 > 工程位于含中文的目录，`gradle.properties` 里已加 `android.overridePathCheck=true`。
 > 如果后续遇到 aapt/kotlinc 的路径类报错，把工程移到纯 ASCII 路径（如 `D:\Projects\DeepPort`）即可。
