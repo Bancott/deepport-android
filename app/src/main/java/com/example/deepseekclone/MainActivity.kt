@@ -8,6 +8,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -36,10 +37,12 @@ import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -73,6 +76,7 @@ import com.example.deepseekclone.ui.settings.VoiceToneDialog
 import com.example.deepseekclone.ui.share.ShareCard
 import com.example.deepseekclone.ui.theme.DeepSeekTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -228,10 +232,19 @@ private fun App(isDark: Boolean) {
 
     // 返回优先级（同一个 Dispatcher 上后注册的先响应）：网页 → 上一页 → 关抽屉 → 系统退出。
     // 网页层必须单独兜住，否则它会跳过设置直接落在会话页，再按一次就退出了。
-    // 跟官方 2.8.0 录屏一致：拖拽期不做页面缩小预览（页面纹丝不动，只有系统返回把手），
-    // 松手完成才走 pop 转场（下方 AnimatedContent 的 slide+fade）。
-    BackHandler(enabled = webTarget == null && navStack.size > 1) {
-        navBack()
+    // 预测性返回：官方 APK 里用的就是 androidx.activity.compose.PredictiveBackHandler
+    // （反编译可见 PredictiveBackHandler.kt:118 的 trace）。手势拖动期间页面按进度跟手右移+淡出，
+    // 松手完成才 pop；中途取消则回到原位。
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    PredictiveBackHandler(enabled = webTarget == null && navStack.size > 1) { progress ->
+        try {
+            progress.collect { event -> backProgress = event.progress.coerceIn(0f, 1f) }
+            backProgress = 0f
+            navBack()
+        } catch (e: CancellationException) {
+            backProgress = 0f
+            throw e
+        }
     }
     BackHandler(enabled = webTarget == null && navStack.size == 1 && drawerOpen) {
         setDrawerOpen(false)
@@ -339,7 +352,13 @@ private fun App(isDark: Boolean) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            // 预测性返回跟手：拖动进度 0→1 时页面右移最多 1/12 屏宽并淡到 0.85，
+            // 与松手后的 pop 转场同一个位移量，视觉上接得住。
+            .graphicsLayer {
+                translationX = backProgress * size.width / 12f
+                alpha = 1f - 0.15f * backProgress
+            },
     ) {
     AnimatedContent(
         targetState = screen,
