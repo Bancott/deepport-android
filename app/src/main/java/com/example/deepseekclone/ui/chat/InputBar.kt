@@ -6,9 +6,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -127,6 +130,13 @@ fun DsInputBar(
                 Spacer(Modifier.height(8.dp))
             }
 
+            // 官方建议词条行：带附件且未输入文字时，文本行上方出现「这是什么 →」等提示 pills
+            // （导入文件时对话框状态.jpg），1dp 描边全圆角胶囊、横向可滑
+            if (state.attachments.isNotEmpty() && state.text.isEmpty()) {
+                SuggestionRow(onPick = onTextChange)
+                Spacer(Modifier.height(10.dp))
+            }
+
             when {
                 state.transcribing -> TranscribingRow()
                 state.mode == InputMode.Voice -> HoldToTalkRow(
@@ -153,6 +163,44 @@ fun DsInputBar(
                 onSend = onSend,
                 onStop = onStop,
             )
+        }
+    }
+}
+
+/** 官方建议词条（导入文件时对话框状态.jpg）：带附件时的快捷提问 pills */
+private val SuggestionPrompts = listOf("这是什么", "分析一下", "怎么办", "解释一下")
+
+@Composable
+private fun SuggestionRow(onPick: (String) -> Unit) {
+    val colors = DsTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SuggestionPrompts.forEach { prompt ->
+            Row(
+                modifier = Modifier
+                    .height(28.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(1.dp, colors.outline, RoundedCornerShape(14.dp))
+                    .clickable(role = Role.Button) { onPick(prompt) }
+                    .padding(horizontal = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = prompt,
+                    style = DsText.bodyTight,
+                    color = colors.textPrimary,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "→",
+                    style = DsText.bodyTight,
+                    color = colors.textSecondary,
+                )
+            }
         }
     }
 }
@@ -336,7 +384,6 @@ private fun ActionRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         DsAssistChip(
             label = "深度思考",
@@ -344,6 +391,8 @@ private fun ActionRow(
             onClick = onToggleDeepThinking,
             iconRes = R.raw.chip_think,
         )
+
+        Spacer(Modifier.width(8.dp))
 
         DsAssistChip(
             label = "智能搜索",
@@ -361,7 +410,8 @@ private fun ActionRow(
             targetValue = if (attachOpen) 45f else 0f,
             label = "attachPlusRotation",
         )
-        // 官方操作行高 32dp：图标 26dp 居中，触摸盒同为 32dp（64dp 的触摸层不会撑高行）
+        // 官方操作行高 32dp：图标 26dp 居中，触摸盒同为 32dp（64dp 的触摸层不会撑高行）；
+        // 右侧按钮中心距 44dp（32dp 盒 + 12dp 间距，官方实测 269.8/313.8/357.8 均匀分布）
         CircleIconButton(
             contentDescription = if (attachOpen) "收起附件" else "添加附件",
             onClick = onAttachClick,
@@ -372,34 +422,45 @@ private fun ActionRow(
             }
         }
 
-        // 第二个位置：有文字时"语音按钮"就地变成等大的上传（发送）按钮；
-        // 没有文字时是麦克风 / 语音模式下是键盘。
+        Spacer(Modifier.width(12.dp))
+
+        // 语音按钮常驻第二位（官方发送态三钮并存：加号/语音/发送，导入文件时对话框状态.jpg），
+        // 文本/语音模式就地切换图标。
+        CircleIconButton(
+            contentDescription = if (state.mode == InputMode.Text) {
+                "切换到按住说话"
+            } else {
+                "切换到键盘输入"
+            },
+            onClick = onToggleMode,
+            size = 32.dp,
+        ) {
+            if (state.mode == InputMode.Text) {
+                VoiceGlyph(color = colors.textPrimary, iconSize = 26.dp)
+            } else {
+                KeyboardGlyph(color = colors.textPrimary, iconSize = 26.dp)
+            }
+        }
+
+        // 发送：可发送时作为第三颗按钮“新增”出来——31dp 蓝色实心圆↑（官方实测 31.3dp）
         if (state.canSend && !generating) {
+            Spacer(Modifier.width(12.dp))
             CircleIconButton(
                 contentDescription = "发送",
                 onClick = onSend,
                 size = 32.dp,
-            ) { SendCircleGlyph(background = colors.primary, arrowColor = colors.onPrimary, iconSize = 24.6.dp) }
-        } else {
-            CircleIconButton(
-                contentDescription = if (state.mode == InputMode.Text) {
-                    "切换到按住说话"
-                } else {
-                    "切换到键盘输入"
-                },
-                onClick = onToggleMode,
-                size = 32.dp,
             ) {
-                if (state.mode == InputMode.Text) {
-                    VoiceGlyph(color = colors.textPrimary, iconSize = 26.dp)
-                } else {
-                    KeyboardGlyph(color = colors.textPrimary, iconSize = 26.dp)
-                }
+                SendCircleGlyph(
+                    background = colors.primary,
+                    arrowColor = colors.onPrimary,
+                    iconSize = 31.dp,
+                )
             }
         }
 
-        // 第三个位置：模型开始工作后才"新增"出来的暂停按钮（包在 40dp 盒里，与左侧按钮同间距）
+        // 生成中：第三颗位置换成停止（30dp 实心圆）
         if (generating) {
+            Spacer(Modifier.width(12.dp))
             Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
                 SendOrStopButton(
                     generating = true,

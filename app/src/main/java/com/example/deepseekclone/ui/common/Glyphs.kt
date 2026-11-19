@@ -108,7 +108,8 @@ fun SendCircleGlyph(
         Canvas(Modifier.fillMaxSize()) {
             drawCircle(color = background, radius = size.minDimension / 2f)
         }
-        SvgIcon(R.drawable.ic_send_fill_20, tint = arrowColor, size = 12.5.dp)
+        // 箭头随圆钮等比缩放（24.6dp 圆配 12.5dp 箭头，官方 31dp 圆约配 15.8dp）
+        SvgIcon(R.drawable.ic_send_fill_20, tint = arrowColor, size = iconSize * 0.51f)
     }
 }
 
