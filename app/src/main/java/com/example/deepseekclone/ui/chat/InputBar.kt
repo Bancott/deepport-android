@@ -305,13 +305,15 @@ private fun ActionRow(
             label = "深度思考",
             selected = state.deepThinking,
             onClick = onToggleDeepThinking,
-        ) { tint -> DeepThinkGlyph(color = tint, iconSize = 14.dp) }
+            iconRes = R.raw.chip_think,
+        )
 
         DsAssistChip(
             label = "智能搜索",
             selected = state.smartSearch,
             onClick = onToggleSmartSearch,
-        ) { tint -> GlobeGlyph(color = tint, iconSize = 15.7.dp) }
+            iconRes = R.raw.chip_globe,
+        )
 
         Spacer(Modifier.weight(1f))
 

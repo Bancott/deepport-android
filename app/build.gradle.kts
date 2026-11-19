@@ -1,4 +1,4 @@
-﻿plugins {
+plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -64,6 +64,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
+    // chip 的形变图标：直接播放 APK 内的 Lottie（raw/think、raw/globe）
+    implementation("com.airbnb.android:lottie-compose:6.6.6")
+
     // 本地持久化：Room（会话元数据 + 消息树）+ KSP 编译期代码生成
     implementation("androidx.room:room-runtime:2.7.1")
     implementation("androidx.room:room-ktx:2.7.1")
@@ -81,3 +84,4 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
 }
+

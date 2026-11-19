@@ -1,9 +1,5 @@
 package com.example.deepseekclone.ui.common
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,12 +12,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,8 +26,12 @@ import com.example.deepseekclone.ui.theme.DsText
 import com.example.deepseekclone.ui.theme.DsTheme
 
 /**
- * 输入卡里的功能 chip（深度思考 / 智能搜索）。
- * 选中：浅蓝底 + 品牌蓝字；未选中：透明底 + 1dp 描边 + 次级灰。
+ * 输入卡里的功能 chip（深度思考 / 智能搜索），对齐官方 2.8.0 `AppSelectableChip`：
+ *
+ * - 高 32dp、胶囊、左右内边距 12dp、1dp 描边、图标 16dp、图标–文字 4dp；
+ * - 文字 14sp / FontWeight 500 / letterSpacing 0；
+ * - **颜色由状态直接取色、瞬时切换**（官方没有 animateColorAsState）；
+ * - 图标是 Lottie 形变（选中正放、取消倒放），动画时长由 JSON 决定（think 433ms / globe 500ms）。
  */
 @Composable
 fun DsAssistChip(
@@ -41,31 +39,13 @@ fun DsAssistChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    iconRes: Int? = null,
     icon: @Composable (Color) -> Unit = {},
 ) {
     val colors = DsTheme.colors
-    val contentColor by animateColorAsState(
-        targetValue = if (selected) colors.chipContent else colors.textSecondary,
-        animationSpec = tween(200),
-        label = "chipContent",
-    )
-    val background by animateColorAsState(
-        targetValue = if (selected) colors.chipBg else Color.Transparent,
-        animationSpec = tween(200),
-        label = "chipBg",
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) colors.primary.copy(alpha = 0.22f) else colors.outline,
-        animationSpec = tween(200),
-        label = "chipBorder",
-    )
-    // 官方点击 chip 时图标有一个短促的旋转/回弹；用 90° 旋转 + 轻微回缩，
-    // 比单纯换色更能让“已开启”被看见。
-    val iconProgress by animateFloatAsState(
-        targetValue = if (selected) 1f else 0f,
-        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
-        label = "chipIcon",
-    )
+    val contentColor = if (selected) colors.chipContent else colors.textSecondary
+    val background = if (selected) colors.chipBg else Color.Transparent
+    val borderColor = if (selected) colors.primary.copy(alpha = 0.22f) else colors.outline
     Row(
         modifier = modifier
             .height(DsDimen.ChipHeight)
@@ -77,29 +57,29 @@ fun DsAssistChip(
                 shape = CircleShape,
             )
             .clickable(role = Role.Checkbox, onClick = onClick)
-            .padding(horizontal = 13.dp),
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier.graphicsLayer {
-                rotationZ = 90f * iconProgress
-                val scale = 1f - 0.06f * (1f - iconProgress)
-                scaleX = scale
-                scaleY = scale
-            },
-        ) {
-            icon(contentColor)
+        if (iconRes != null) {
+            ToggleLottieIcon(
+                iconRes = iconRes,
+                selected = selected,
+                tint = contentColor,
+            )
+        } else {
+            Box { icon(contentColor) }
         }
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(4.dp))
         Text(
             text = label,
-            style = DsText.caption.copy(fontSize = 13.5.sp, fontWeight = FontWeight.Medium),
+            style = DsText.caption.copy(
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.sp,
+            ),
             color = contentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
     }
 }
-
-
-
