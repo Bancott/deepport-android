@@ -1,6 +1,10 @@
 ﻿package com.example.deepseekclone.ui.web
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import android.os.Message
+import android.webkit.WebResourceRequest
 import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
@@ -30,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.launch
@@ -137,12 +142,20 @@ fun WebScreen(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 WebView(ctx).apply {
+                    // WebView 首帧默认是白底：深色主题下从设置点进来会先闪一下白，再被网页覆盖。
+                    // 把底色设成 App 页面背景，闪白就没了（网页本身是浅色，加载完仍然是白的，但那是内容）。
+                    setBackgroundColor(colors.bg.toArgb())
+                    // 支付/登录依赖 Cookie，第三方 Cookie 默认是关的
+                    android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     // 显式钉死 LTR：某些系统区域设置 / 输入法会让 WebView 把输入框按 RTL 处理，
                     // 表现就是手机号"从右往左"填、页面元素左右镜像。
                     layoutDirection = View.LAYOUT_DIRECTION_LTR
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
+                        // 充值页的二维码/收银台常以新窗口（target=_blank）打开，必须允许弹窗
+                        setSupportMultipleWindows(true)
+                        javaScriptCanOpenWindowsAutomatically = true
                         // 设置里的"字体大小"只作用于 App 自身，别让系统字体缩放把网页排版撑乱
                         textZoom = 100
                         // 按页面自带 viewport 自适应宽度，避免桌面版布局被横向裁切
@@ -153,6 +166,30 @@ fun WebScreen(
                         displayZoomControls = false
                     }
                     webViewClient = object : WebViewClient() {
+                        // 收银台会唤起 weixin:// / alipays:// 这类 scheme，交给系统 App 处理；
+                        // http(s) 仍然留在内置 WebView 里。
+                        private fun openExternallyIfNeeded(url: String?): Boolean {
+                            val u = url ?: return false
+                            if (u.startsWith("http://") || u.startsWith("https://") ||
+                                u.startsWith("about:") || u.startsWith("javascript:")
+                            ) {
+                                return false
+                            }
+                            return runCatching {
+                                ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+                                true
+                            }.getOrDefault(false)
+                        }
+
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                        ): Boolean = openExternallyIfNeeded(request?.url?.toString())
+
+                        @Deprecated("Deprecated in Java")
+                        override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean =
+                            openExternallyIfNeeded(url)
+
                         override fun onPageFinished(view: WebView?, url: String?) {
                             progress = 100
                             canGoBack = view?.canGoBack() == true
@@ -234,6 +271,39 @@ fun WebScreen(
                     webChromeClient = object : WebChromeClient() {
                         override fun onProgressChanged(view: WebView?, newProgress: Int) {
                             progress = newProgress
+                        }
+
+                        /**
+                         * 充值页的二维码常以 target=_blank 打开；默认 WebView 会直接吞掉。
+                         * 这里用一个探针 WebView 接住新窗口 URL，再交给当前 WebView 打开，
+                         * 这样二维码仍在应用内显示。
+                         */
+                        override fun onCreateWindow(
+                            view: WebView?,
+                            isDialog: Boolean,
+                            isUserGesture: Boolean,
+                            resultMsg: Message?,
+                        ): Boolean {
+                            val ctx = view?.context ?: return false
+                            val probe = WebView(ctx)
+                            probe.webViewClient = object : WebViewClient() {
+                                override fun shouldOverrideUrlLoading(
+                                    v: WebView?,
+                                    request: WebResourceRequest?,
+                                ): Boolean {
+                                    request?.url?.toString()?.let { target ->
+                                        if (target.startsWith("http")) view.loadUrl(target)
+                                        else runCatching {
+                                            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                                        }
+                                    }
+                                    probe.destroy()
+                                    return true
+                                }
+                            }
+                            (resultMsg?.obj as? WebView.WebViewTransport)?.webView = probe
+                            resultMsg?.sendToTarget()
+                            return true
                         }
 
                         override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
