@@ -36,6 +36,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
@@ -166,13 +167,26 @@ fun MessageStream(
             listState.scrollToItem(messages.lastIndex, scrollOffset = 10_000)
         }
     }
-    // 编辑态：把被编辑的那条滚到可见处（官方会把它滚到输入框正上方，再 -8dp 补偿）
+    // 编辑态：把被编辑的那条"吸"到输入框正上方（官方 SnapToInputFieldEffect，-8dp 补偿）——
+    // 先滚到目标项，再补滚把该项底部钉到视口底 8dp 之上，而不是甩到列表顶
+    val density = LocalDensity.current
     LaunchedEffect(editingId) {
         val id = editingId ?: return@LaunchedEffect
         val index = messages.indexOfFirst { it.id == id }
         if (index >= 0) {
             follow = false
             listState.animateScrollToItem(index)
+            val info = listState.layoutInfo
+            val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+            if (item != null) {
+                val gapPx = with(density) { 8.dp.toPx() }
+                // 目标：该项底边落在视口底上方 8dp（输入框正上方）
+                val desiredTop = info.viewportEndOffset - gapPx - item.size
+                val delta = item.offset - desiredTop
+                if (delta != 0f) {
+                    listState.animateScrollBy(delta)
+                }
+            }
         }
     }
 

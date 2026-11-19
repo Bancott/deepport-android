@@ -205,32 +205,53 @@ private fun SuggestionRow(onPick: (String) -> Unit) {
     }
 }
 
+/**
+ * 官方 MessageEditingTip（ChatInputField.kt:482 / thb.java:2326）：
+ * 高 42dp、上圆角 24dp（下 4dp）、内距 14/7/9/7，
+ * 内容 = 分支图标 + 「修改并创建分支」+ 28dp 圆形取消钮，文字 14sp。
+ */
 @Composable
 private fun EditingNotice(onCancel: () -> Unit) {
     val colors = DsTheme.colors
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .height(42.dp)
+            .clip(
+                RoundedCornerShape(
+                    topStart = 24.dp,
+                    topEnd = 24.dp,
+                    bottomStart = 4.dp,
+                    bottomEnd = 4.dp,
+                ),
+            )
             .background(colors.primaryContainer)
-            .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 14.dp, top = 7.dp, end = 9.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        SvgIcon(
+            R.drawable.ic_branch_outline_20,
+            tint = colors.primary,
+            size = 16.dp,
+        )
+        Spacer(Modifier.width(6.dp))
         Text(
-            text = "正在编辑消息，发送后会创建新分支",
-            style = DsText.caption.copy(fontSize = 12.sp),
+            text = "修改并创建分支",
+            style = DsText.bodyTight.copy(fontSize = 14.sp),
             color = colors.primary,
             modifier = Modifier.weight(1f),
         )
-        Text(
-            text = "取消",
-            style = DsText.caption.copy(fontSize = 12.sp),
-            color = colors.primary,
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .clickable(role = Role.Button, onClick = onCancel)
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-        )
+        CircleIconButton(
+            contentDescription = "取消编辑",
+            onClick = onCancel,
+            size = 28.dp,
+        ) {
+            SvgIcon(
+                R.drawable.ic_close_outline_16,
+                tint = colors.textSecondary,
+                size = 13.dp,
+            )
+        }
     }
 }
 
