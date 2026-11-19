@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.web
+﻿package com.example.deepseekclone.ui.web
 
 import android.annotation.SuppressLint
 import android.view.View
@@ -7,6 +7,9 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +28,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,20 +63,48 @@ fun WebScreen(
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
     // 网页内部还能后退时，返回键优先走历史；历史空了才交给外层关掉页面
     var canGoBack by remember { mutableStateOf(false) }
+    // 关闭时整页向下滑出后再移除：不做系统预测性返回那种跟手/缩放，
+    // 就是很直接地"往下收走"。
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val screenHeightPx = with(density) {
+        LocalConfiguration.current.screenHeightDp.dp.toPx()
+    }
+    val offsetY = remember { Animatable(0f) }
+    var dismissing by remember { mutableStateOf(false) }
+
+    fun dismiss() {
+        if (dismissing) return
+        dismissing = true
+        scope.launch {
+            offsetY.animateTo(
+                targetValue = screenHeightPx,
+                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+            )
+            onBack()
+        }
+    }
+
     BackHandler(enabled = canGoBack) {
         webViewRef.value?.goBack()
+    }
+    // 历史空了：由这里接管返回，先播下滑动画再让宿主移除页面
+    // （注册顺序比宿主晚，所以优先于宿主的 BackHandler）
+    BackHandler(enabled = !canGoBack) {
+        dismiss()
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(colors.bg)
+            .graphicsLayer { translationY = offsetY.value }
             .statusBarsPadding(),
     ) {
         Box(Modifier.fillMaxWidth().height(56.dp)) {
             CircleIconButton(
                 contentDescription = "返回",
-                onClick = onBack,
+                onClick = { dismiss() },
                 containerColor = colors.surface2,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
