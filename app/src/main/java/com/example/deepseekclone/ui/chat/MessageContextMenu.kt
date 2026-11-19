@@ -63,6 +63,8 @@ fun MessageLongPressBox(
     onEdit: () -> Unit = {},
     /** 传出手指长按点的窗口坐标，供「选择文本」定位被按的那一段 */
     onSelectText: (Offset) -> Unit = {},
+    /** 「选择文本」→ 打开官方同款「选择文字」模态面板（宿主负责） */
+    onSelectTextSheet: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     var pressWindow by remember { mutableStateOf(Offset.Zero) }
@@ -92,6 +94,7 @@ fun MessageLongPressBox(
             onRegenerate = onRegenerate,
             onEdit = onEdit,
             onSelectText = { onSelectText(pressWindow) },
+            onSelectTextSheet = onSelectTextSheet,
         )
     }
 }
@@ -110,7 +113,10 @@ fun MessageMenuPopup(
     anchorY: Dp = 0.dp,
     onRegenerate: () -> Unit = {},
     onEdit: () -> Unit = {},
+    /** 旧的原地选词回调：保留参数不动（lead 接完新面板后会删掉调用） */
     onSelectText: () -> Unit = {},
+    /** 「选择文本」改为打开官方同款「选择文字」模态面板 */
+    onSelectTextSheet: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val colors = DsTheme.colors
@@ -135,7 +141,7 @@ fun MessageMenuPopup(
                 iconRes = R.drawable.ic_copy_outline),
         )
         add(
-            MenuAction("选择文本", { onSelectText(); onExpandedChange(false) },
+            MenuAction("选择文本", { onSelectTextSheet(); onExpandedChange(false) },
                 iconRes = R.drawable.ic_select_outline),
         )
         if (isUser) {
