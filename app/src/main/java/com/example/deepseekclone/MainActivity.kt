@@ -7,27 +7,36 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import android.app.Activity
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.deepseekclone.data.AttachmentStore
@@ -70,6 +80,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.coroutines.cancellation.CancellationException
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -212,16 +223,62 @@ private fun App(isDark: Boolean) {
     // 启动时先备好列表，抽屉打开就能直接出内容，不用等一次查询
     LaunchedEffect(Unit) { refreshDrawer() }
 
+    // 预测性返回（Manifest 开 enableOnBackInvokedCallback 后系统送跟手进度）：
+    // 手势期间页面按进度缩小+圆角预览，松手完成才走 pop，取消则弹回原状。
     // 返回优先级（同一个 Dispatcher 上后注册的先响应）：网页 → 上一页 → 关抽屉 → 系统退出。
     // 网页层必须单独兜住，否则它会跳过设置直接落在会话页，再按一次就退出了。
-    BackHandler(enabled = webTarget == null && navStack.size > 1) {
-        navBack()
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    var settleEpoch by remember { mutableStateOf(0) }
+
+    // 手势结束（完成/取消）后把进度平滑归零：页面“松手回弹/收回”，不瞬跳
+    LaunchedEffect(settleEpoch) {
+        if (settleEpoch > 0 && backProgress > 0f) {
+            animate(backProgress, 0f, tween(220)) { v, _ -> backProgress = v }
+        }
     }
-    BackHandler(enabled = webTarget == null && navStack.size == 1 && drawerOpen) {
-        setDrawerOpen(false)
+
+    PredictiveBackHandler(enabled = webTarget == null && navStack.size > 1) { progress ->
+        try {
+            progress.collect { backProgress = it.progress }
+            navBack()
+        } catch (e: CancellationException) {
+            throw e
+        } finally {
+            settleEpoch++
+        }
     }
-    BackHandler(enabled = webTarget != null) {
-        webTarget = null
+    PredictiveBackHandler(enabled = webTarget == null && navStack.size == 1 && drawerOpen) { progress ->
+        try {
+            progress.collect { backProgress = it.progress }
+            setDrawerOpen(false)
+        } catch (e: CancellationException) {
+            throw e
+        } finally {
+            settleEpoch++
+        }
+    }
+    PredictiveBackHandler(enabled = webTarget != null) { progress ->
+        try {
+            progress.collect { backProgress = it.progress }
+            webTarget = null
+        } catch (e: CancellationException) {
+            throw e
+        } finally {
+            settleEpoch++
+        }
+    }
+
+    // 页面级预测性返回预览：手势期间整页跟手缩小（1→0.91）+ 圆角（0→22dp）。
+    // 抽屉开着时不做（内容层已由 PushDrawerLayout 缩到 0.95，再叠会打架）。
+    val previewModifier = Modifier.graphicsLayer {
+        val p = if (navStack.size == 1 && drawerOpen) 0f else backProgress
+        if (p > 0f) {
+            val s = 1f - 0.09f * p
+            scaleX = s
+            scaleY = s
+            shape = RoundedCornerShape(22.dp * p)
+            clip = true
+        }
     }
 
     if (showAppearance) {
@@ -285,12 +342,19 @@ private fun App(isDark: Boolean) {
 
     // WebView 页面（协议 / 帮助 / 官方充值）
     webTarget?.let { (url, title) ->
-        WebScreen(
-            url = url,
-            title = title,
-            onBack = { webTarget = null },
-            onUserInfo = { n, a -> vm.updateUserInfo(n, a) },
-        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .then(previewModifier),
+        ) {
+            WebScreen(
+                url = url,
+                title = title,
+                onBack = { webTarget = null },
+                onUserInfo = { n, a -> vm.updateUserInfo(n, a) },
+            )
+        }
         return
     }
 
@@ -312,6 +376,12 @@ private fun App(isDark: Boolean) {
 
     // 官方：页面切换由 Navigation-Compose 的默认转场完成——进入/返回都是
     // fadeIn/fadeOut(tween(700))，没有位移、缩放或共享元素（sz6.q / sz6.r → wa3 case 23/24）。
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .then(previewModifier),
+    ) {
     AnimatedContent(
         targetState = screen,
         transitionSpec = {
@@ -525,6 +595,7 @@ private fun App(isDark: Boolean) {
                 },
             )
         }
+    }
     }
     }
 }
