@@ -1,4 +1,4 @@
-package com.example.deepseekclone.ui.chat
+﻿package com.example.deepseekclone.ui.chat
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
@@ -75,6 +75,8 @@ fun ChatScreen(
     modifier: Modifier = Modifier,
     onMenuClick: () -> Unit = {},
     menuDescription: String = "打开会话列表",
+    /** 抽屉是否展开：展开时收起键盘与附件面板，避免输入栏顶起会话 */
+    drawerOpen: Boolean = false,
     onNewChatClick: () -> Unit = {},
     onToggleSpeechOutput: () -> Unit = {},
     onTextChange: (String) -> Unit = {},
@@ -134,6 +136,13 @@ fun ChatScreen(
         lastImePx = imeBottomPx
     }
     LaunchedEffect(state.messages.size) { attachOpen = false }
+    // 向右滑出历史会话（或点菜单键）时，如果输入栏正被键盘/附件面板顶着，一并收起
+    LaunchedEffect(drawerOpen) {
+        if (drawerOpen) {
+            attachOpen = false
+            focusManager.clearFocus()
+        }
+    }
 
     // 面板进度同时驱动两件事：输入栏让出的键盘留白、面板自身高度。
     // 用一个值驱动，两者之和只会单调变化——不会再出现"先被面板顶上去、再被键盘留白拽下来"的折返。

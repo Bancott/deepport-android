@@ -1,4 +1,4 @@
-package com.example.deepseekclone
+﻿package com.example.deepseekclone
 
 import android.os.Bundle
 import android.content.ClipData
@@ -499,6 +499,7 @@ private fun App(isDark: Boolean) {
         ) {
             ChatScreen(
                 state = chat,
+                drawerOpen = drawerOpen,
                 // 官方顶栏左键是「开/关侧边栏」：抽屉开着时同一按钮点一下收起
                 onMenuClick = { setDrawerOpen(!drawerOpen) },
                 menuDescription = if (drawerOpen) "关闭会话列表" else "打开会话列表",
