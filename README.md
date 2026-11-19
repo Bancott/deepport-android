@@ -1,4 +1,4 @@
-﻿# DeepPort · 第三方 DeepSeek 客户端（Android）
+# DeepPort · 第三方 DeepSeek 客户端（Android）
 
 > **本项目为第三方开发者作品，基于 DeepSeek 开放 API 构建，并非 DeepSeek 官方产品，也不代表官方立场。**
 > 应用本身免费，但调用模型需要你自备 API Key（由服务商按量计费）。请认准官网 deepseek.com，不要在其他网站输入密钥或付款。
@@ -20,8 +20,8 @@ Key 只在创建时完整显示一次，关闭后无法再次查看；如果泄�
 ## 版本规范
 
 - `versionName` 用 SemVer：`MAJOR.MINOR.PATCH`，预发布加 `-beta.N` / `-rc.N`；
-- `versionCode = major × 1_000_000 + minor × 1_000 + patch × 10 + channel`（channel：0 正式、1 beta、2 rc）；
-  例：`1.2.3` → `1020030`，`2.0.0-beta.1` → `2000001`；
+- `versionCode` 用**流水号**（与官方 App 的 `2.8.0(297)` 同款）：从 1 开始，每发一版 +1，不编码版本语义；
+- 设置页显示 `versionName(versionCode)`，例如 `1.0.0(1)`；
 - 每次发布打 tag `vX.Y.Z`，Release 附 `app-debug.apk` 或签名后的 release APK。
 
 ---
@@ -44,7 +44,7 @@ Key 只在创建时完整显示一次，关闭后无法再次查看；如果泄�
 ```powershell
 $env:JAVA_HOME = "D:\tools\jdk17\jdk-17.0.21.0.2+1"
 & "$env:USERPROFILE\.gradle\wrapper\dists\gradle-8.14-all\28mvdsg72witjywy1exbbuc46\gradle-8.14\bin\gradle.bat" `
-  -p "D:\深度求索\DeepSeekClone" :app:assembleDebug
+  -p "D:\深度求索\DeepPort" :app:assembleDebug
 ```
 
 产物：`app/build/outputs/apk/debug/app-debug.apk`
@@ -52,7 +52,7 @@ $env:JAVA_HOME = "D:\tools\jdk17\jdk-17.0.21.0.2+1"
 Android Studio：直接 `File > Open` 选择 `DeepPort` 目录，Sync 后运行即可。
 
 > 工程位于含中文的目录，`gradle.properties` 里已加 `android.overridePathCheck=true`。
-> 如果后续遇到 aapt/kotlinc 的路径类报错，把工程移到纯 ASCII 路径（如 `D:\Projects\DeepSeekClone`）即可。
+> 如果后续遇到 aapt/kotlinc 的路径类报错，把工程移到纯 ASCII 路径（如 `D:\Projects\DeepPort`）即可。
 
 ---
 
