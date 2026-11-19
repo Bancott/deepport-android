@@ -55,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +65,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import kotlinx.coroutines.delay
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -335,27 +353,15 @@ private fun ConversationList(
                 // 长按/点三点时给该行一个灰底；已经是蓝色选中态则不叠灰
                 val isMenuTarget = menuTarget?.id == conversation.id
                 val density = LocalDensity.current
-                var rowTopPx by remember { mutableStateOf(0f) }
-                var rowWidthPx by remember { mutableStateOf(0f) }
-                // 在"点击那一刻"算朝向：组合阶段读 rowTopPx 往往还是 0，会永远判成向下
-                var openOffsetY by remember { mutableStateOf(0.dp) }
-                fun resolveOffsetY() {
-                    openOffsetY = with(density) {
-                        if (rowTopPx.toDp() > 212.dp) (-212).dp else 0.dp
-                    }
-                }
-                // 右边缘对齐高亮行右缘（官方菜单卡片与行右缘同为 310dp）
-                val menuOffsetX = with(density) {
-                    rowWidthPx.toDp() - MenuWidth - RowEnd
-                }
+                // 行在窗口中的矩形：菜单定位完全以它为准（官方不跟手指）
+                var rowRect by remember { mutableStateOf(Rect.Zero) }
                 Box {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(RowHeight)
                             .onGloballyPositioned {
-                                rowTopPx = it.positionInRoot().y
-                                rowWidthPx = it.size.width.toFloat()
+                                rowRect = it.boundsInWindow()
                             }
                             .padding(start = 10.dp, end = RowEnd)
                             // 不用 clip：行尾三点要略微越过圆角背景，才能和底部账户行的三点
@@ -373,7 +379,7 @@ private fun ConversationList(
                                 indication = null,
                                 role = Role.Button,
                                 onClick = { onClick(conversation) },
-                                onLongClick = { resolveOffsetY(); menuTarget = conversation },
+                                onLongClick = { menuTarget = conversation },
                             )
                             .padding(horizontal = RowInset),
                         verticalAlignment = Alignment.CenterVertically,
@@ -405,7 +411,7 @@ private fun ConversationList(
                             modifier = Modifier
                                 .size(34.dp)
                                 .clip(CircleShape)
-                                .clickable(role = Role.Button) { resolveOffsetY(); menuTarget = conversation },
+                                .clickable(role = Role.Button) { menuTarget = conversation },
                             contentAlignment = Alignment.CenterEnd,
                         ) {
                             ThreeDots(color = if (isCurrent) colors.primary else colors.textTertiary)
@@ -414,10 +420,9 @@ private fun ConversationList(
 
                     val target = menuTarget
                     if (target != null && target.id == conversation.id) {
-                        ConversationMenu(
+                        SessionMenu(
                             target = target,
-                            offsetY = openOffsetY,
-                            offsetX = menuOffsetX,
+                            anchor = rowRect,
                             onDismiss = { menuTarget = null },
                             onRename = onRename,
                             onPin = onPin,
@@ -432,14 +437,46 @@ private fun ConversationList(
     }
 }
 
-private val MenuWidth = 172.dp
+/** 官方 ContextMenuDefaults：固定宽 208dp、圆角 16dp、项高 48dp、图标 20dp、图标–文字 12dp */
+private val MenuWidth = 208.dp
+private val MenuCorner = 16.dp
+private val MenuItemHeight = 48.dp
+private val MenuIconSize = 20.dp
+private val MenuIconGap = 12.dp
 
-/** 会话二级菜单：默认往上弹，上方空间不足时由 DropdownMenu 自己回落到下方 */
+/**
+ * 官方会话菜单的定位规则（PopupPositionProvider）：
+ * - 锚点是**被长按/点三点的行**，与手指位置无关；
+ * - 默认贴行上方（菜单底 = 行顶），要求「行顶 − 菜单高 ≥ 180px」，否则贴行下方；
+ * - LTR 下菜单右缘对齐行右缘，再 clamp 进窗口；
+ * - 越界先 clamp y。
+ */
+private class SessionMenuPositionProvider(private val anchor: Rect) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val ltr = layoutDirection == LayoutDirection.Ltr
+        var x = if (ltr) anchor.right.toInt() - popupContentSize.width else anchor.left.toInt()
+        x = x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        val above = anchor.top.toInt() - popupContentSize.height >= 180
+        var y = if (above) anchor.top.toInt() - popupContentSize.height else anchor.bottom.toInt()
+        y = y.coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0))
+        return IntOffset(x, y)
+    }
+}
+
+/**
+ * 会话二级菜单：自绘 Popup。
+ * 进入 scale 0.8→1（spring 0.75 / 3000），退出 spring(1.0 / 10000)，**没有 fade**；
+ * 缩放原点在「贴着行的那条边」——贴行下方时是顶边中点，贴行上方时是底边（行不够宽则靠右）。
+ */
 @Composable
-private fun ConversationMenu(
+private fun SessionMenu(
     target: ConversationUi,
-    offsetY: Dp,
-    offsetX: Dp,
+    anchor: Rect,
     onDismiss: () -> Unit,
     onRename: (ConversationUi) -> Unit,
     onPin: (ConversationUi) -> Unit,
@@ -447,58 +484,115 @@ private fun ConversationMenu(
     onDelete: (ConversationUi) -> Unit,
 ) {
     val colors = DsTheme.colors
-    DropdownMenu(
-        expanded = true,
-        onDismissRequest = onDismiss,
-        modifier = Modifier.width(MenuWidth),
-        shape = RoundedCornerShape(16.dp),
-        containerColor = colors.surface3,
-        // 官方是从这一行往上弹；offsetY 由行位置决定，顶部几行改朝下，
-        // offsetX 让菜单右边缘对齐条目右边缘
-        offset = DpOffset(offsetX, offsetY),
+    var shown by remember { mutableStateOf(false) }
+    var menuSize by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(Unit) { shown = true }
+    val scale by animateFloatAsState(
+        targetValue = if (shown) 1f else 0.8f,
+        animationSpec = if (shown) {
+            spring(dampingRatio = 0.75f, stiffness = 3000f)
+        } else {
+            spring(dampingRatio = 1f, stiffness = 10000f)
+        },
+        label = "sessionMenuScale",
+    )
+    // 退出先把 0.8 的收缩动画走完，再真正移除菜单
+    LaunchedEffect(shown) {
+        if (!shown) {
+            delay(90)
+            onDismiss()
+        }
+    }
+    val above = anchor.top.toInt() - menuSize.height >= 180
+    val origin = when {
+        !above -> TransformOrigin(0.5f, 0f)
+        anchor.width >= menuSize.width -> TransformOrigin(0.5f, 1f)
+        else -> TransformOrigin(1f, 1f)
+    }
+    Popup(
+        popupPositionProvider = SessionMenuPositionProvider(anchor),
+        onDismissRequest = { shown = false },
+        properties = PopupProperties(focusable = true),
     ) {
-        ConversationMenuItem("重命名", R.drawable.ic_edit_outline_20) { onDismiss(); onRename(target) }
-        ConversationMenuItem(
-            if (target.pinned) "取消置顶" else "置顶",
-            if (target.pinned) R.drawable.ic_unpin_outline_20 else R.drawable.ic_pin_outline_20,
-        ) { onDismiss(); onPin(target) }
-        ConversationMenuItem("多选", R.drawable.ic_checklist_outline_16) { onDismiss(); onToggleMultiSelect() }
-        // 功能项与危险项之间用一条细线隔开（官方就是这样分组的）
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 12.dp),
-            thickness = 0.6.dp,
-            color = colors.outline,
-        )
-        ConversationMenuItem("删除", R.drawable.ic_trash_outline_20, danger = true) { onDismiss(); onDelete(target) }
+        Surface(
+            modifier = Modifier
+                .width(MenuWidth)
+                .onSizeChanged { menuSize = it }
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    transformOrigin = origin
+                },
+            shape = RoundedCornerShape(MenuCorner),
+            color = colors.surface3,
+        ) {
+            Column(
+                Modifier.padding(start = 12.dp, top = 16.dp, end = 12.dp, bottom = 16.dp),
+            ) {
+                SessionMenuItem("重命名", R.drawable.ic_edit_outline_20) { shown = false; onRename(target) }
+                SessionMenuDivider()
+                SessionMenuItem(
+                    if (target.pinned) "取消置顶" else "置顶",
+                    if (target.pinned) R.drawable.ic_unpin_outline_20 else R.drawable.ic_pin_outline_20,
+                ) { shown = false; onPin(target) }
+                SessionMenuDivider()
+                SessionMenuItem("多选", R.drawable.ic_checklist_outline_16) {
+                    shown = false
+                    onToggleMultiSelect()
+                }
+                SessionMenuDivider()
+                SessionMenuItem("删除", R.drawable.ic_trash_outline_20, danger = true) {
+                    shown = false
+                    onDelete(target)
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun ConversationMenuItem(
+private fun SessionMenuDivider() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(DsTheme.colors.outline),
+    )
+}
+
+@Composable
+private fun SessionMenuItem(
     text: String,
     @androidx.annotation.DrawableRes iconRes: Int,
     danger: Boolean = false,
     onClick: () -> Unit,
 ) {
     val colors = DsTheme.colors
-    DropdownMenuItem(
-        leadingIcon = {
-            SvgIcon(
-                iconRes,
-                tint = if (danger) colors.danger else colors.textSecondary,
-                size = 18.dp,
-            )
-        },
-        text = {
-            Text(
-                text = text,
-                style = DsText.label,
-                color = if (danger) colors.danger else colors.textPrimary,
-                modifier = Modifier.padding(vertical = 2.dp),
-            )
-        },
-        onClick = onClick,
-    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = MenuItemHeight)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SvgIcon(
+            iconRes,
+            tint = if (danger) colors.danger else colors.textSecondary,
+            size = MenuIconSize,
+        )
+        Spacer(Modifier.width(MenuIconGap))
+        Text(
+            text = text,
+            style = DsText.body.copy(
+                fontSize = 16.sp,
+                lineHeight = 24.sp,
+                letterSpacing = 0.sp,
+            ),
+            color = if (danger) colors.danger else colors.textPrimary,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }
 
 @Composable
