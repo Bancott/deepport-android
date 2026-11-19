@@ -510,11 +510,14 @@ private val MenuIconGap = 12.dp
 /**
  * 官方会话菜单的定位规则（PopupPositionProvider）：
  * - 锚点是**被长按/点三点的行**，与手指位置无关；
- * - 默认贴行上方（菜单底 = 行顶），要求「行顶 − 菜单高 ≥ 180px」，否则贴行下方；
+ * - 默认贴行上方（菜单底 = 行顶 − 8dp 间隙），要求「行顶 − 菜单高 ≥ 180px」，否则贴行下方；
  * - LTR 下菜单右缘对齐行右缘，再 clamp 进窗口；
  * - 越界先 clamp y。
  */
-private class SessionMenuPositionProvider(private val anchor: Rect) : PopupPositionProvider {
+private class SessionMenuPositionProvider(
+    private val anchor: Rect,
+    private val gapPx: Int,
+) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect,
         windowSize: IntSize,
@@ -525,7 +528,11 @@ private class SessionMenuPositionProvider(private val anchor: Rect) : PopupPosit
         var x = if (ltr) anchor.right.toInt() - popupContentSize.width else anchor.left.toInt()
         x = x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
         val above = anchor.top.toInt() - popupContentSize.height >= 180
-        var y = if (above) anchor.top.toInt() - popupContentSize.height else anchor.bottom.toInt()
+        var y = if (above) {
+            anchor.top.toInt() - popupContentSize.height - gapPx
+        } else {
+            anchor.bottom.toInt() + gapPx
+        }
         y = y.coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0))
         return IntOffset(x, y)
     }
@@ -572,8 +579,10 @@ private fun SessionMenu(
         anchor.width >= menuSize.width -> TransformOrigin(0.5f, 1f)
         else -> TransformOrigin(1f, 1f)
     }
+    // 官方菜单与行之间约 8dp 间隙（会话设置.jpg 实测 8.3dp）
+    val gapPx = with(LocalDensity.current) { 8.dp.toPx().toInt() }
     Popup(
-        popupPositionProvider = SessionMenuPositionProvider(anchor),
+        popupPositionProvider = SessionMenuPositionProvider(anchor, gapPx),
         onDismissRequest = { shown = false },
         properties = PopupProperties(focusable = true),
     ) {
@@ -588,10 +597,11 @@ private fun SessionMenu(
                 },
             shape = RoundedCornerShape(MenuCorner),
             color = colors.surface3,
+            // 官方是轻阴影（深色下几乎不可见的落影）
+            shadowElevation = 8.dp,
         ) {
-            Column(
-                Modifier.padding(start = 12.dp, top = 16.dp, end = 12.dp, bottom = 16.dp),
-            ) {
+            // 实测菜单无竖向内边距：4×48dp 项 + 1dp 分隔线 = 193dp（项目此前多加了上下 16dp）
+            Column {
                 SessionMenuItem("重命名", R.drawable.ic_edit_outline_20) { shown = false; onRename(target) }
                 SessionMenuDivider()
                 SessionMenuItem(
