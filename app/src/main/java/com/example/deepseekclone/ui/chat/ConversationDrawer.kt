@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -175,9 +176,21 @@ fun ConversationDrawer(
  */
 private val SearchEnd = 26.dp
 private val RowEnd = 20.dp
-private val RowDotsEnd = 16.dp
 private val FooterDotsEnd = 28.dp
 private val TuneEnd = 33.dp
+
+/**
+ * 会话行几何（官方 2.8.0 ChatSessionItem.kt:167-180 / sz6.java:1101,1141）：
+ * - 行盒最小高 **44dp**（不是 52dp）
+ * - 行高亮圆角 **16dp**（不是 12dp）
+ * - 行内容左右内边距 **16dp**
+ * - 标题 **16sp / lineHeight 24sp / letterSpacing 0**，当前会话 500、其余 400
+ */
+private val RowHeight = 44.dp
+private val RowCorner = 16.dp
+private val RowInset = 16.dp
+private val RowTitleSize = 16.sp
+private val RowTitleLineHeight = 24.sp
 
 /**
  * 官方三点：点径 3.3dp、圆心间距 6.7dp。
@@ -325,7 +338,7 @@ private fun ConversationList(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp)
+                            .height(RowHeight)
                             .onGloballyPositioned {
                                 rowTopPx = it.positionInRoot().y
                                 rowWidthPx = it.size.width.toFloat()
@@ -339,7 +352,7 @@ private fun ConversationList(
                                     isMenuTarget -> colors.surface2
                                     else -> Color.Transparent
                                 },
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(RowCorner),
                             )
                             .combinedClickable(
                                 interactionSource = remember { MutableInteractionSource() },
@@ -348,7 +361,7 @@ private fun ConversationList(
                                 onClick = { onClick(conversation) },
                                 onLongClick = { resolveOffsetY(); menuTarget = conversation },
                             )
-                            .padding(start = 12.dp, end = RowDotsEnd),
+                            .padding(horizontal = RowInset),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (conversation.pinned) {
@@ -361,7 +374,13 @@ private fun ConversationList(
                         }
                         Text(
                             text = conversation.title,
-                            style = DsText.label,
+                            style = DsText.label.copy(
+                                fontSize = RowTitleSize,
+                                lineHeight = RowTitleLineHeight,
+                                letterSpacing = 0.sp,
+                                // 官方：当前会话 500，其余 400（sz6.java:971 / 1197）
+                                fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
+                            ),
                             color = if (isCurrent) colors.primary else colors.textPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
