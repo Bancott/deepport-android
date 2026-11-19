@@ -53,12 +53,13 @@ class DeepSeekApi {
         thinking: Boolean,
         search: Boolean,
         requestTitle: Boolean,
+        system: String = systemPrompt(),
     ): Flow<ApiEvent> = flow {
         val url = trimOrigin(origin) + "/anthropic/v1/messages"
         val body = JSONObject().apply {
             put("model", model)
             put("stream", true)
-            put("system", SYSTEM_PROMPT)
+            put("system", system)
             put("thinking", JSONObject().put("type", if (thinking) "enabled" else "disabled"))
             put("safety_check", JSONObject().put("level", "high"))
             // 阅读链接常开；智能搜索开关只决定是否再声明搜索工具（与官方 chat-demo 一致）
@@ -490,6 +491,26 @@ class DeepSeekApi {
         const val FILES_BETA = "files-api-2025-04-14"
         /** 所有生成请求统一携带的助手身份说明（官方 chat-demo 同款） */
         const val SYSTEM_PROMPT = "该助手为DeepSeek，由深度求索公司创造。"
+
+        /**
+         * 官方 App / 网页端靠一条 `latest_reminder` 元信息告诉模型"今天几号"，
+         * 格式：`<日期>,<星期>,<地点>,<平台>,<语言>`。
+         * 公开 API（本项目的 Anthropic 兼容接口）不接受这个角色，所以等价信息放进 system 提示，
+         * 每次请求实时生成，避免模型拿训练截止时间去猜日期。
+         */
+        fun reminderLine(): String {
+            val now = java.time.ZonedDateTime.now()
+            val date = now.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+            val week = now.dayOfWeek.getDisplayName(
+                java.time.format.TextStyle.FULL,
+                java.util.Locale.CHINA,
+            )
+            val lang = java.util.Locale.getDefault().toLanguageTag()
+            return "$date,$week,中国,Android,$lang"
+        }
+
+        /** system 提示 = 身份说明 + 时间锚点（日期/星期/地点/平台/语言） */
+        fun systemPrompt(): String = SYSTEM_PROMPT + "\n当前时间：" + reminderLine() + "。"
         /** 图片不传 purpose；PDF / Word / PPT 需要服务端做版面识别，其余按纯数据上传 */
         fun purposeFor(name: String, isImage: Boolean): String? = when {
             isImage -> null
