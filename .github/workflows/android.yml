@@ -21,7 +21,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # 仓库里不放密钥：从 secrets 还原 keystore，并生成 build.gradle.kts 读取的 keystore.properties
+      # 仓库里不放密钥：从 secrets 还原 keystore，并生成 build.gradle.kts 读取的 keystore.properties。
+      # 这一步任何失败都只 warning + 回退 debug 签名，不让整个构建红掉；
+      # base64 里混入换行 / PEM 头尾（certutil 的输出就是这样）也能解码。
       - name: Prepare signing config
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -29,20 +31,51 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::warning::未配置签名 secrets，本次将用 debug 签名打包（不可用于发布）"
+          set -u
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::warning::未配置 KEYSTORE_BASE64，本次用 debug 签名（不可用于发布）"
             exit 0
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "KEYSTORE_BASE64 长度: ${#KEYSTORE_BASE64}"
+
+          printf '%s' "$KEYSTORE_BASE64" \
+            | tr -d '\r\n\t ' \
+            | sed -e 's/-----BEGIN[^-]*-----//' -e 's/-----END[^-]*-----//' \
+            | base64 -d -i > "$RUNNER_TEMP/release.jks" 2>"$RUNNER_TEMP/b64.err" || true
+
+          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" \
+                 -storepass "${KEYSTORE_PASSWORD:-x}" >/dev/null 2>&1; then
+            echo "::warning::KEYSTORE_BASE64 解码失败或口令不匹配，本次用 debug 签名（不可用于发布）"
+            head -c 200 "$RUNNER_TEMP/b64.err" || true
+            rm -f "$RUNNER_TEMP/release.jks"
+            exit 0
+          fi
+
           {
             echo "storeFile=$RUNNER_TEMP/release.jks"
-            echo "storePassword=$KEYSTORE_PASSWORD"
-            echo "keyAlias=$KEY_ALIAS"
-            echo "keyPassword=$KEY_PASSWORD"
+            echo "storePassword=${KEYSTORE_PASSWORD:-}"
+            echo "keyAlias=${KEY_ALIAS:-deepport}"
+            echo "keyPassword=${KEY_PASSWORD:-}"
           } > keystore.properties
+          echo "签名配置就绪（alias=${KEY_ALIAS:-deepport}）"
 
       - name: Build release APK
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      # 产物改名成 DeepPort-<tag 去掉 v>.apk，下载的人一眼知道版本
+      - name: Rename APK
+        run: |
+          set -u
+          ver="${GITHUB_REF_NAME#v}"
+          case "$GITHUB_REF_NAME" in
+            v*) ;;
+            *) ver="dev" ;;
+          esac
+          src=app/build/outputs/apk/release/app-release.apk
+          if [ -f "$src" ]; then
+            mv "$src" "app/build/outputs/apk/release/DeepPort-${ver}.apk"
+          fi
+          ls -lh app/build/outputs/apk/release/
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -55,5 +88,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/*.apk
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
