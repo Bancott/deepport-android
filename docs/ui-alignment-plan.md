@@ -17,3 +17,22 @@
 | 10 | 十一、加号与附件面板 | 加号 45° 用默认 spring；触摸盒 64dp；面板入场 expandIn 150 + scaleIn 0.6→1 150 + fadeIn 110/40，退场 110/110/50，curve cubic-bezier(0,0,0.58,1)；按钮 3 等宽、间距 8dp、padding 20/20/20/10、字 15/22 | 改旋转 spec；面板动画参数；面板内距/字号 | `InputBar.kt`、`ChatScreen.kt`、`AttachmentPanel.kt` |
 | 11 | 十二、朗读音色 | ModalBottomSheet：顶角 24dp、spring(0.9,800)、内容高 586dp、顶栏 56dp；胶囊 180×100dp 流体（AGSL/GLSL）；名称 17sp/400/22、副标题 14sp/400/22、间距 16dp；页点 6dp、颜色 250ms | 改为 ModalBottomSheet；胶囊 180×100 + 流体着色器（API33+ RuntimeShader，低版本退化为动画渐变）；字号/间距/页点 | `VoiceToneDialog.kt`、`res/raw/*.frag`（可选） |
 | 12 | 十三、返回动画 | pop fadeIn/fadeOut 700ms；顶栏左键 = 开/关侧边栏（44dp） | 页面切换加 700ms 交叉淡入淡出；顶栏键语义改为 toggle + 44dp | `MainActivity.kt`、`DeepSeekTopBar.kt` |
+
+---
+
+## 完成情况（自动生成）
+
+| # | 项目 | 状态 | commit |
+|---|---|---|---|
+| 1 | chip Lottie | 完成 | c1d71ed |
+| 2 | 选择文字面板 | 完成 | b58622e / 7c69bfd |
+| 3 | 输入卡内编辑建分支 | 完成 | e865e16 |
+| 4 | 会话标题 16sp/44dp | 完成 | cc1d374 |
+| 5 | 多选动画 | 完成 | 4682296 |
+| 6 | 会话长按菜单 | 完成 | 2257694 |
+| 7 | 三点/菜单动效 | 完成（并入 2257694） | 2257694 |
+| 8 | 思考区 15/24 | 完成 | 7d2d2cb |
+| 9 | 分支切换 15sp/4dp | 完成 | 44b5ba1 |
+| 10 | 加号/附件面板 | 完成 | e8bfcf2 |
+| 11 | 朗读音色面板 | 进行中 | — |
+| 12 | 返回 700ms 淡入淡出 | 完成 | 4839d79 |
