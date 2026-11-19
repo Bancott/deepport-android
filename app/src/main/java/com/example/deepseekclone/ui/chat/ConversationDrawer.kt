@@ -133,8 +133,8 @@ fun ConversationDrawer(
                 // 底部让出系统手势条高度，避免账户名贴住小白条
                 .navigationBarsPadding(),
         ) {
-            // 官方 2.8.0：只有头部在「搜索框 ↔ 多选头」之间做交叉淡入 + 尺寸补间（200ms, ease-in-out），
-            // 列表与底栏是硬切换，没有整块横向滑动。
+            // 官方 2.8.0：头部在「搜索框 ↔ 多选头」之间做交叉淡入 + 尺寸补间（200ms, ease-in-out）；
+            // 列表是同一个，行内 checkboxAlpha/titleShift 两个 200ms 动画随多选模式整体切换。
             val headerEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
             AnimatedContent(
                 targetState = state.multiSelect,
@@ -161,23 +161,21 @@ fun ConversationDrawer(
             }
 
             Box(Modifier.weight(1f)) {
-                if (state.multiSelect) {
-                    MultiSelectList(
-                        groups = state.groups,
-                        selected = state.selectedIds,
-                        onToggleSelect = onToggleSelect,
-                    )
-                } else {
-                    ConversationList(
-                        groups = state.groups,
-                        currentId = state.currentId,
-                        onClick = onConversationClick,
-                        onLongPress = onLongPress,
-                        onPin = onPin,
-                        onRename = onRename,
-                        onToggleMultiSelect = onToggleMultiSelect,
-                    )
-                }
+                // 官方 2.8.0（ChatSessionItem.kt:180）：普通/多选是**同一个列表**，
+                // 行内只做 checkboxAlpha（0→1）与 titleShift（0→30dp）两个 200ms 动画，
+                // 驱动布尔是"是否处于多选模式"——进模式瞬间所有行同时让位，不是逐行按选中态切换。
+                ConversationList(
+                    groups = state.groups,
+                    currentId = state.currentId,
+                    multiSelect = state.multiSelect,
+                    selected = state.selectedIds,
+                    onClick = onConversationClick,
+                    onToggleSelect = onToggleSelect,
+                    onLongPress = onLongPress,
+                    onPin = onPin,
+                    onRename = onRename,
+                    onToggleMultiSelect = onToggleMultiSelect,
+                )
             }
 
             if (state.multiSelect) {
@@ -312,7 +310,10 @@ private fun MultiSelectHeader(onClose: () -> Unit, selectedCount: Int) {
 private fun ConversationList(
     groups: List<ConversationGroup>,
     currentId: String?,
+    multiSelect: Boolean,
+    selected: Set<String>,
     onClick: (ConversationUi) -> Unit,
+    onToggleSelect: (ConversationUi) -> Unit,
     onLongPress: (ConversationUi) -> Unit,
     onPin: (ConversationUi) -> Unit,
     onRename: (ConversationUi) -> Unit,
@@ -336,7 +337,7 @@ private fun ConversationList(
                         color = colors.textSecondary,
                         modifier = Modifier.weight(1f),
                     )
-                    if (group.label == groups.firstOrNull()?.label) {
+                    if (!multiSelect && group.label == groups.firstOrNull()?.label) {
                         SvgIcon(
                             R.drawable.ic_checklist_outline_16,
                             tint = colors.textSecondary,
@@ -350,13 +351,28 @@ private fun ConversationList(
             }
             items(group.items, key = { it.id }) { conversation ->
                 val isCurrent = conversation.id == currentId
+                val isSelected = conversation.id in selected
                 // 长按/点三点时给该行一个灰底；已经是蓝色选中态则不叠灰
                 val isMenuTarget = menuTarget?.id == conversation.id
                 val density = LocalDensity.current
                 // 行在窗口中的矩形：菜单定位完全以它为准（官方不跟手指）
                 var rowRect by remember { mutableStateOf(Rect.Zero) }
+                // 官方 2.8.0（ChatSessionItem.kt:180）：动画标签就叫 checkboxAlpha / titleShift，
+                // 均 200ms ease-in-out；驱动布尔是"多选模式"——进模式瞬间全体行勾选框淡入、标题统一右移 30dp。
+                // 勾选框只用填充色区分选中/未选中，不再各自进出。
+                val rowEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+                val checkAlpha by animateFloatAsState(
+                    targetValue = if (multiSelect) 1f else 0f,
+                    animationSpec = tween(200, easing = rowEasing),
+                    label = "checkboxAlpha",
+                )
+                val titleShift by animateFloatAsState(
+                    targetValue = if (multiSelect) 30f else 0f,
+                    animationSpec = tween(200, easing = rowEasing),
+                    label = "titleShift",
+                )
                 Box {
-                    Row(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(RowHeight)
@@ -368,7 +384,8 @@ private fun ConversationList(
                             // 落在同一条竖线上；圆角交给 background 的 shape 自己画
                             .background(
                                 color = when {
-                                    isCurrent -> colors.primary.copy(alpha = 0.12f)
+                                    multiSelect && isSelected -> colors.primary.copy(alpha = 0.12f)
+                                    !multiSelect && isCurrent -> colors.primary.copy(alpha = 0.12f)
                                     isMenuTarget -> colors.surface2
                                     else -> Color.Transparent
                                 },
@@ -378,48 +395,94 @@ private fun ConversationList(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 role = Role.Button,
-                                onClick = { onClick(conversation) },
-                                onLongClick = { menuTarget = conversation },
+                                onClick = {
+                                    if (multiSelect) onToggleSelect(conversation) else onClick(conversation)
+                                },
+                                onLongClick = { if (!multiSelect) menuTarget = conversation },
                             )
                             .padding(horizontal = RowInset),
-                        verticalAlignment = Alignment.CenterVertically,
+                        contentAlignment = Alignment.CenterStart,
                     ) {
-                        if (conversation.pinned) {
-                            SvgIcon(
-                                R.drawable.ic_pin_outline_20,
-                                tint = if (isCurrent) colors.primary else colors.textTertiary,
-                                size = 14.dp,
-                            )
-                            Spacer(Modifier.width(6.dp))
-                        }
-                        Text(
-                            text = conversation.title,
-                            style = DsText.label.copy(
-                                fontSize = RowTitleSize,
-                                lineHeight = RowTitleLineHeight,
-                                letterSpacing = 0.sp,
-                                // 官方：当前会话 500，其余 400（sz6.java:971 / 1197）
-                                fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
-                            ),
-                            color = if (isCurrent) colors.primary else colors.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        // 三点：点它和长按一样进二级菜单
+                        // 勾选框：叠加在内容起点，空间由 titleShift 30dp（=框 20 + 间距 10）让出，
+                        // 不占布局流——普通模式下标题仍从原位起排，不会横向跳位
                         Box(
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(20.dp)
+                                .alpha(checkAlpha)
                                 .clip(CircleShape)
-                                .clickable(role = Role.Button) { menuTarget = conversation },
-                            contentAlignment = Alignment.CenterEnd,
+                                .border(
+                                    1.5.dp,
+                                    if (isSelected) colors.primary else colors.textTertiary,
+                                    CircleShape,
+                                )
+                                .background(if (isSelected) colors.primary else Color.Transparent),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            ThreeDots(color = if (isCurrent) colors.primary else colors.textTertiary)
+                            if (isSelected) {
+                                SvgIcon(
+                                    R.drawable.ic_checked_filled_16,
+                                    tint = colors.onPrimary,
+                                    size = 12.dp,
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .offset(x = titleShift.dp)
+                                    .weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (conversation.pinned) {
+                                    SvgIcon(
+                                        R.drawable.ic_pin_outline_20,
+                                        tint = if (isCurrent && !multiSelect) colors.primary else colors.textTertiary,
+                                        size = 14.dp,
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                }
+                                Text(
+                                    text = conversation.title,
+                                    style = DsText.label.copy(
+                                        fontSize = RowTitleSize,
+                                        lineHeight = RowTitleLineHeight,
+                                        letterSpacing = 0.sp,
+                                        // 官方：当前会话 500，其余 400（sz6.java:971 / 1197）
+                                        fontWeight = if (isCurrent && !multiSelect) FontWeight.Medium else FontWeight.Normal,
+                                    ),
+                                    color = if (isCurrent && !multiSelect) colors.primary else colors.textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            // 三点：点它和长按一样进二级菜单；多选模式下仅作摆设（行点击=切换选中）
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .clickable(
+                                        enabled = !multiSelect,
+                                        role = Role.Button,
+                                    ) { menuTarget = conversation },
+                                contentAlignment = Alignment.CenterEnd,
+                            ) {
+                                ThreeDots(
+                                    color = if (isCurrent && !multiSelect) {
+                                        colors.primary
+                                    } else {
+                                        colors.textTertiary
+                                    },
+                                )
+                            }
                         }
                     }
 
                     val target = menuTarget
-                    if (target != null && target.id == conversation.id) {
+                    if (!multiSelect && target != null && target.id == conversation.id) {
                         SessionMenu(
                             target = target,
                             anchor = rowRect,
@@ -592,88 +655,6 @@ private fun SessionMenuItem(
             color = if (danger) colors.danger else colors.textPrimary,
             modifier = Modifier.weight(1f),
         )
-    }
-}
-
-@Composable
-private fun MultiSelectList(
-    groups: List<ConversationGroup>,
-    selected: Set<String>,
-    onToggleSelect: (ConversationUi) -> Unit,
-) {
-    val colors = DsTheme.colors
-    LazyColumn(Modifier.fillMaxSize()) {
-        groups.forEach { group ->
-            item(key = "mh-${group.label}") {
-                Text(
-                    text = group.label,
-                    style = DsText.caption,
-                    color = colors.textSecondary,
-                    modifier = Modifier.padding(start = 22.dp, top = 18.dp, bottom = 6.dp),
-                )
-            }
-            items(group.items, key = { "m-${it.id}" }) { conversation ->
-                val isSelected = conversation.id in selected
-                // 官方 2.8.0：勾选框 alpha 0→1、标题右移 0→30dp，均 200ms ease-in-out，无逐项延迟
-                val rowEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
-                val checkAlpha by animateFloatAsState(
-                    targetValue = if (isSelected) 1f else 0f,
-                    animationSpec = tween(200, easing = rowEasing),
-                    label = "checkboxAlpha",
-                )
-                val titleShift by animateFloatAsState(
-                    targetValue = if (isSelected) 30f else 0f,
-                    animationSpec = tween(200, easing = rowEasing),
-                    label = "titleShift",
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(RowHeight)
-                        .padding(horizontal = RowInset)
-                        .background(
-                            color = if (isSelected) colors.primary.copy(alpha = 0.12f) else Color.Transparent,
-                            shape = RoundedCornerShape(RowCorner),
-                        )
-                        .clickable(role = Role.Checkbox) {
-                            onToggleSelect(conversation)
-                        }
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .alpha(checkAlpha)
-                            .clip(CircleShape)
-                            .border(1.5.dp, if (isSelected) colors.primary else colors.textTertiary, CircleShape)
-                            .background(if (isSelected) colors.primary else Color.Transparent),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (isSelected) {
-                            SvgIcon(
-                                R.drawable.ic_checked_filled_16,
-                                tint = colors.onPrimary,
-                                size = 12.dp,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Text(
-                        text = conversation.title,
-                        style = DsText.label.copy(
-                            fontSize = RowTitleSize,
-                            lineHeight = RowTitleLineHeight,
-                            letterSpacing = 0.sp,
-                        ),
-                        color = colors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.offset(x = titleShift.dp),
-                    )
-                }
-            }
-        }
     }
 }
 
