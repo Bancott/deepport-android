@@ -1,4 +1,4 @@
-﻿# DeepPort · 第三方 DeepSeek 客户端（Android）
+# DeepPort · 第三方 DeepSeek 客户端（Android）
 
 > **本项目为第三方开发者作品，基于 DeepSeek 开放 API 构建，并非 DeepSeek 官方产品，也不代表官方立场。**
 > 应用本身免费，但调用模型需要你自备 API Key（由服务商按量计费）。请认准官网 deepseek.com，不要在其他网站输入密钥或付款。
@@ -126,7 +126,6 @@ data/
 └── ...
 ui/share/ShareCard.kt      # 分享图片卡片（Canvas 渲染 PNG + FileProvider）
 ui/common/SiteIcons.kt     # 来源站点图标：内存 + 磁盘缓存，失败回退首字母徽标
-tools/icons/               # 图标 SVG 源（chat-demo / traced）+ build_vectors.py
 ```
 
 ---
@@ -143,11 +142,9 @@ tools/icons/               # 图标 SVG 源（chat-demo / traced）+ build_vecto
 
 ### 矢量图标（`res/drawable`）
 
-> **2026-11-18 更新**：组件图标已从官方 Android 2.8.0(297) APK 直接提取，
-> 共 117 个 VectorDrawable + 19 个 4x PNG，源文件在 `tools/icons/official/`，
-> 提取脚本 `tools/icons/extract_official_icons.py`。下表是早期 chat-demo / 描图来源，
-> 现在实际渲染以官方同名资源（`ic_menu_outline_24`、`ic_voice_outline_26`、
-> `ic_keyboard_outline_26`、`ic_add_outline_26`、`ic_send_fill_20`、`ic_stop_fill_20` 等）为准。
+> 组件图标与官方 Android 2.8.0(297) 对齐，全部以 `res/drawable` 下的
+> VectorDrawable / 4x PNG 为准，App 构建不依赖任何外部图标源文件。
+> 早期从 chat-demo / 截图描图的来源记录保留在下表，仅作命名与尺寸参考。
 
 | 文件 | 来源 | 说明 |
 |---|---|---|
@@ -166,11 +163,8 @@ tools/icons/               # 图标 SVG 源（chat-demo / traced）+ build_vecto
 | `ic_volume_speaker.xml` | 截图实测重绘 | 顶栏自动朗读开关的喇叭（开/关斜线） |
 | `ic_deepseek_whale.xml` | 官方位图轮廓矢量化 | 鲸鱼 logo（nonZero + 反向孔洞） |
 
-> 前 9 个图标源文件在 `tools/icons/chat-demo/`（从 chat-demo 的 `src/components/base/icons.tsx` 原样抽出），
-> 由 `tools/icons/build_vectors.py` 生成到 `res/drawable`；语音输入、分享、喇叭在 chat-demo 里没有对应图标，
-> 源文件放 `tools/icons/traced/`，继续按 3x 截图描。`res/drawable` 不能建子目录，所以源文件与映射统一在 `tools/icons` 管理。
 > 鲸鱼 logo 第一版用了第三方单路径 + evenOdd，在 Android 上 PathParser 渲染成破碎轮廓；
-> 现已改为从官方 PNG 追踪轮廓生成的多环路径，白圈与眼部孔洞稳定。
+> 现已改为多环路径，白圈与眼部孔洞稳定。
 
 ## 4. 真机校准记录（小米 14 / 23127PN0CC）
 
@@ -197,16 +191,12 @@ tools/icons/               # 图标 SVG 源（chat-demo / traced）+ build_vecto
 
 ## 5.5 官方 2.8.0 审计（2026-11-18）
 
-对 `D:\接收\DeepSeek_2.8.0.apk`（`com.deepseek.chat` / 2.8.0(297)）做了完整审计：
+对 `DeepSeek_2.8.0.apk`（`com.deepseek.chat` / 2.8.0(297)）做了完整审计：
 设置与个性化、模型三档、7 档字体、附件限制、会话内搜索、分享链接、通话、表格/Mermaid，
-以及 117 个 VectorDrawable + 19 个 4x PNG 组件图标的提取与替换。
-
-- 审计报告与改进清单：[`docs/official-2.8.0-audit.md`](docs/official-2.8.0-audit.md)
-- 图标提取脚本：[`tools/icons/extract_official_icons.py`](tools/icons/extract_official_icons.py)
-- 图标源：[`tools/icons/official/`](tools/icons/official/)
+以及组件图标的提取与替换。审计笔记与对比截图属于开发过程材料，未随仓库发布。
 
 这一轮已落地：官方图标全套替换、设置页对齐、思考自动折叠持久化并真正生效、文件类型图标、
-搜索/来源/相机等页面的图标统一。报告里 P0/P1 项是下一轮建议。
+搜索/来源/相机等页面的图标统一。
 
 ---
 
@@ -244,6 +234,6 @@ tools/icons/               # 图标 SVG 源（chat-demo / traced）+ build_vecto
 ## 8. 设计口径
 
 - 视觉尺寸以 3.0x（≈400×890dp）归一，真机需 `adb shell wm density` 复核。
-- 图标：品牌相关图标来自 `tools/icons/`（chat-demo 官方 SVG + 手绘溯源），生成 `res/drawable` 后统一用 `SvgIcon` tint；Material 图标库只用于关闭/键盘等通用项。
+- 图标：品牌相关图标以 `res/drawable` 下的 VectorDrawable 为准，统一用 `SvgIcon` tint；Material 图标库只用于关闭/键盘等通用项。
 - 任何颜色都不得在页面里硬编码，一律走 `DsTheme.colors`。
 
