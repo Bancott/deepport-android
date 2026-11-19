@@ -66,7 +66,7 @@ object SiteIconStore {
                 connectTimeout = 8_000
                 readTimeout = 8_000
                 instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "DeepSeekClone/1.0")
+                setRequestProperty("User-Agent", "DeepPort/1.0")
             }
             try {
                 if (conn.responseCode !in 200..299) return@runCatching null
