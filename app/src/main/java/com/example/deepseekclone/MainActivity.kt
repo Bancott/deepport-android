@@ -1,4 +1,4 @@
-package com.example.deepseekclone
+﻿package com.example.deepseekclone
 
 import android.os.Bundle
 import android.content.ClipData
@@ -47,7 +47,6 @@ import com.example.deepseekclone.ui.chat.ConfirmDialog
 import com.example.deepseekclone.ui.chat.ConversationDrawer
 import com.example.deepseekclone.ui.chat.ConversationUi
 import com.example.deepseekclone.ui.chat.DrawerUiState
-import com.example.deepseekclone.ui.chat.EditMessageDialog
 import com.example.deepseekclone.ui.chat.PushDrawerLayout
 import com.example.deepseekclone.ui.chat.RenameConversationDialog
 import com.example.deepseekclone.ui.chat.SearchScreen
@@ -156,7 +155,6 @@ private fun App(isDark: Boolean) {
     var drawer by remember { mutableStateOf(DrawerUiState()) }
     var renameTarget by remember { mutableStateOf<ConversationUi?>(null) }
     var deleteTarget by remember { mutableStateOf<ConversationUi?>(null) }
-    var editTarget by remember { mutableStateOf<com.example.deepseekclone.ui.chat.MessageUi?>(null) }
     var showAppearance by remember { mutableStateOf(false) }
     var showLanguage by remember { mutableStateOf(false) }
     var webTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -277,14 +275,6 @@ private fun App(isDark: Boolean) {
                 refreshDrawer()
             },
             onDismiss = { deleteTarget = null },
-        )
-    }
-
-    editTarget?.let { target ->
-        EditMessageDialog(
-            initial = target.text,
-            onConfirm = { newText -> vm.editUserMessage(target, newText) },
-            onDismiss = { editTarget = null },
         )
     }
 
@@ -500,7 +490,8 @@ private fun App(isDark: Boolean) {
                 onRetryMessage = { vm.retry(it) },
                 onBranchPrev = { vm.selectBranch(it, -1) },
                 onBranchNext = { vm.selectBranch(it, 1) },
-                onEditMessage = { editTarget = it },
+                onEditMessage = { vm.beginEdit(it) },
+                onCancelEdit = { vm.cancelEdit() },
                 onOpenSource = { url -> webTarget = url to "来源" },
                 onCopyMessage = { message ->
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

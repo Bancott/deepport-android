@@ -459,8 +459,39 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     /* ----------------------------- 发送 / 停止 ----------------------------- */
 
+    /** 进入编辑态：官方把编辑目标写进 VM，底部输入卡回填原文，原消息留在列表里 */
+    fun beginEdit(message: MessageUi) {
+        if (_state.value.isGenerating) return
+        if (message.role != ChatRole.User) return
+        _state.update {
+            it.copy(
+                editing = message,
+                input = it.input.copy(text = message.text, mode = InputMode.Text),
+            )
+        }
+    }
+
+    /** 取消编辑：清掉编辑目标并清空输入框（官方点其它消息 / 关闭即取消） */
+    fun cancelEdit() {
+        if (_state.value.editing == null) return
+        _state.update { it.copy(editing = null, input = it.input.copy(text = "")) }
+    }
+
     fun send() {
         val current = _state.value
+        // 编辑态下「发送」= 新建兄弟分支并重新回答
+        current.editing?.let { target ->
+            val clean = current.input.text.trim()
+            if (clean.isEmpty() || clean == target.text) {
+                cancelEdit()
+                return
+            }
+            _state.update {
+                it.copy(editing = null, input = it.input.copy(text = "", attachments = emptyList()))
+            }
+            editUserMessage(target, clean)
+            return
+        }
         if (!current.input.canSend || current.isGenerating) return
 
         val text = current.input.text.trim()

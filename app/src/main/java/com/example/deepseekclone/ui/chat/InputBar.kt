@@ -72,6 +72,8 @@ fun DsInputBar(
     generating: Boolean,
     modifier: Modifier = Modifier,
     attachOpen: Boolean = false,
+    editing: Boolean = false,
+    onCancelEdit: () -> Unit = {},
     onTextChange: (String) -> Unit = {},
     onToggleDeepThinking: () -> Unit = {},
     onToggleSmartSearch: () -> Unit = {},
@@ -104,6 +106,11 @@ fun DsInputBar(
                 bottom = 10.dp,
             ),
         ) {
+            if (editing) {
+                EditingNotice(onCancel = onCancelEdit)
+                Spacer(Modifier.height(8.dp))
+            }
+
             if (state.attachments.isNotEmpty()) {
                 PendingAttachmentRow(
                     items = state.attachments,
@@ -146,6 +153,35 @@ fun DsInputBar(
                 onStop = onStop,
             )
         }
+    }
+}
+
+@Composable
+private fun EditingNotice(onCancel: () -> Unit) {
+    val colors = DsTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(colors.primaryContainer)
+            .padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "正在编辑消息，发送后会创建新分支",
+            style = DsText.caption.copy(fontSize = 12.sp),
+            color = colors.primary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "取消",
+            style = DsText.caption.copy(fontSize = 12.sp),
+            color = colors.primary,
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(role = Role.Button, onClick = onCancel)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        )
     }
 }
 

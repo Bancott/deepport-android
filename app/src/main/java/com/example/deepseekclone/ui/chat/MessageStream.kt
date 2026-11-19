@@ -36,6 +36,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -144,6 +145,9 @@ fun MessageStream(
     onSourcesClick: (MessageUi) -> Unit = {},
     onBranchPrev: (MessageUi) -> Unit = {},
     onBranchNext: (MessageUi) -> Unit = {},
+    /** 正在编辑的消息 id：其它消息淡化到 0.9、点一下取消编辑 */
+    editingId: String? = null,
+    onCancelEdit: () -> Unit = {},
 ) {
     // 自动跟随：用户停在底部时，新内容到达自动滚到底；一旦手动上滑即暂停跟随
     val listState = rememberLazyListState()
@@ -160,6 +164,15 @@ fun MessageStream(
             listState.scrollToItem(messages.lastIndex, scrollOffset = 10_000)
         }
     }
+    // 编辑态：把被编辑的那条滚到可见处（官方会把它滚到输入框正上方，再 -8dp 补偿）
+    LaunchedEffect(editingId) {
+        val id = editingId ?: return@LaunchedEffect
+        val index = messages.indexOfFirst { it.id == id }
+        if (index >= 0) {
+            follow = false
+            listState.animateScrollToItem(index)
+        }
+    }
 
     LazyColumn(
         state = listState,
@@ -167,33 +180,52 @@ fun MessageStream(
         contentPadding = PaddingValues(top = 6.dp, bottom = 10.dp),
     ) {
         items(messages, key = { it.id }) { message ->
-            when (message.role) {
-                ChatRole.User -> UserMessage(
-                    message = message,
-                    selection = selection?.takeIf { it.messageId == message.id },
-                    onSelectionChange = onSelectionChange,
-                    onEdit = { onEdit(message) },
-                )
-                ChatRole.Assistant -> AssistantMessage(
-                    message = message,
-                    selection = selection?.takeIf { it.messageId == message.id },
-                    onSelectionChange = onSelectionChange,
-                    sessionTokens = sessionTokens,
-                    readingState = if (message.id == readingMessageId) {
-                        readingState
-                    } else {
-                        ReadAloudState.Idle
-                    },
-                    onToggleReasoning = { onToggleReasoning(message) },
-                    onCopy = { onCopy(message) },
-                    onSpeak = { onSpeak(message) },
-                    onShare = { onShare(message) },
-                    onRegenerate = { onRegenerate(message) },
-                    onRetry = { onRetry(message) },
-                    onSourcesClick = { onSourcesClick(message) },
-                    onBranchPrev = { onBranchPrev(message) },
-                    onBranchNext = { onBranchNext(message) },
-                )
+            // 非编辑目标：alpha 0.9，点一下取消编辑（官方 CancelEditEffect）
+            val dimmed = editingId != null && editingId != message.id
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(if (dimmed) 0.9f else 1f)
+                    .then(
+                        if (dimmed) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onCancelEdit,
+                            )
+                        } else {
+                            Modifier
+                        },
+                    ),
+            ) {
+                when (message.role) {
+                    ChatRole.User -> UserMessage(
+                        message = message,
+                        selection = selection?.takeIf { it.messageId == message.id },
+                        onSelectionChange = onSelectionChange,
+                        onEdit = { onEdit(message) },
+                    )
+                    ChatRole.Assistant -> AssistantMessage(
+                        message = message,
+                        selection = selection?.takeIf { it.messageId == message.id },
+                        onSelectionChange = onSelectionChange,
+                        sessionTokens = sessionTokens,
+                        readingState = if (message.id == readingMessageId) {
+                            readingState
+                        } else {
+                            ReadAloudState.Idle
+                        },
+                        onToggleReasoning = { onToggleReasoning(message) },
+                        onCopy = { onCopy(message) },
+                        onSpeak = { onSpeak(message) },
+                        onShare = { onShare(message) },
+                        onRegenerate = { onRegenerate(message) },
+                        onRetry = { onRetry(message) },
+                        onSourcesClick = { onSourcesClick(message) },
+                        onBranchPrev = { onBranchPrev(message) },
+                        onBranchNext = { onBranchNext(message) },
+                    )
+                }
             }
         }
     }

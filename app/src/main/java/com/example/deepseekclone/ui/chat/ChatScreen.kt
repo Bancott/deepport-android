@@ -104,6 +104,7 @@ fun ChatScreen(
     onOpenSource: (String) -> Unit = {},
     onBranchPrev: (MessageUi) -> Unit = {},
     onBranchNext: (MessageUi) -> Unit = {},
+    onCancelEdit: () -> Unit = {},
 ) {
     val colors = DsTheme.colors
     val focusManager = LocalFocusManager.current
@@ -232,6 +233,8 @@ fun ChatScreen(
                         onSourcesClick = { message -> sourcesSheet = message.sources },
                         onBranchPrev = onBranchPrev,
                         onBranchNext = onBranchNext,
+                        editingId = state.editing?.id,
+                        onCancelEdit = onCancelEdit,
                     )
                     BottomFadeMask(
                         modifier = Modifier.align(Alignment.BottomCenter),
@@ -248,6 +251,8 @@ fun ChatScreen(
                 state = state.input,
                 generating = state.isGenerating,
                 attachOpen = attachOpen,
+                editing = state.editing != null,
+                onCancelEdit = onCancelEdit,
                 onTextChange = onTextChange,
                 onToggleDeepThinking = onToggleDeepThinking,
                 onToggleSmartSearch = onToggleSmartSearch,

@@ -142,6 +142,11 @@ data class ChatUiState(
     val messages: List<MessageUi> = emptyList(),
     /** 当前 active path 上的累计 token */
     val sessionTokens: Int = 0,
+    /**
+     * 正在编辑的那条用户消息（官方 2.8 的做法：编辑发生在底部输入卡里，
+     * 原消息留在原位并滚到输入框上方，其它消息淡化、点一下取消）。
+     */
+    val editing: MessageUi? = null,
     val isSpeechOutputOn: Boolean = false,
     /** 正在朗读（或准备朗读）的消息 id；null 表示没有 */
     val readingMessageId: String? = null,
