@@ -1,4 +1,4 @@
-package io.github.bancott.deepport.ui.chat
+﻿package io.github.bancott.deepport.ui.chat
 
 import io.github.bancott.deepport.R
 
@@ -138,7 +138,8 @@ data class MessageSelection(
 /** 是否含需要 WebView 才能渲染的富内容：公式、GFM 表格、代码块、SVG */
 internal fun isRichMarkdown(text: String): Boolean {
     if (text.contains("$$")) return true
-    if (text.contains("<svg", ignoreCase = true)) return true
+    // 官方渲染用 llm-math，LLM 常写 \(...\)、\[...\]、\begin{equation}
+    if (text.contains("\\(") || text.contains("\\[") || text.contains("\\begin{")) return true
     if (text.contains("```")) return true
     if (Regex("\\$[^$\\n]{1,200}\\$").containsMatchIn(text)) return true
     val tableLines = text.lineSequence().count { it.trimStart().startsWith("|") }

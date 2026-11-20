@@ -1,4 +1,4 @@
-package io.github.bancott.deepport.ui.chat.web
+﻿package io.github.bancott.deepport.ui.chat.web
 
 import android.annotation.SuppressLint
 import android.graphics.Color as AndroidColor
@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
+import io.github.bancott.deepport.ui.theme.DsDarkColors
 import io.github.bancott.deepport.ui.theme.DsTheme
 import org.json.JSONObject
 
@@ -47,7 +48,7 @@ fun WebMessageView(
         val outline = hex(colors.outline.toArgb())
         val link = hex(colors.primary.toArgb())
         val codeBg = hex(colors.surface2.toArgb())
-        "window.setTheme({fg:'$fg',fg2:'$fg2',outline:'$outline',link:'$link',codeBg:'$codeBg'})"
+        "window.setTheme({fg:'$fg',fg2:'$fg2',outline:'$outline',link:'$link',codeBg:'$codeBg',dark:${colors === DsDarkColors}})"
     }
 
     AndroidView(
