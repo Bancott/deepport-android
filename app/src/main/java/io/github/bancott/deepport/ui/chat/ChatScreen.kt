@@ -1,4 +1,4 @@
-﻿package io.github.bancott.deepport.ui.chat
+package io.github.bancott.deepport.ui.chat
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
@@ -119,8 +119,6 @@ fun ChatScreen(
     // 附件面板：点「+」展开，键盘弹起 / 发出消息后自动收起
     var attachOpen by remember { mutableStateOf(false) }
     var sourcesSheet by remember { mutableStateOf<List<SourceItem>?>(null) }
-    // 「选择文字」面板：菜单点「选择文本」后把整条消息文本交给模态面板
-    var selectionText by remember { mutableStateOf<String?>(null) }
     // 正在原地选中的那条消息；点空白处即取消
     var messageSelection by remember { mutableStateOf<MessageSelection?>(null) }
     var selectionStartedAt by remember { mutableLongStateOf(0L) }
@@ -244,7 +242,6 @@ fun ChatScreen(
                         onBranchNext = onBranchNext,
                         editingId = state.editing?.id,
                         onCancelEdit = onCancelEdit,
-                        onSelectTextSheet = { message -> selectionText = message.text },
                     )
                     BottomFadeMask(
                         modifier = Modifier.align(Alignment.BottomCenter),
@@ -343,13 +340,6 @@ fun ChatScreen(
         // 按住说话：整屏泛光 + 提示 + 波形（盖在最上层；纯绘制，不拦触摸）
         if (voiceRecording) {
             VoiceOverlay(cancel = voiceCancel, levels = voiceLevels)
-        }
-
-        selectionText?.let { text ->
-            MessageTextSelectionSheet(
-                text = text,
-                onDismiss = { selectionText = null },
-            )
         }
 
         sourcesSheet?.let { list ->

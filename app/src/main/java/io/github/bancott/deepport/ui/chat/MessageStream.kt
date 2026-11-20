@@ -1,4 +1,4 @@
-﻿package io.github.bancott.deepport.ui.chat
+package io.github.bancott.deepport.ui.chat
 
 import io.github.bancott.deepport.R
 
@@ -149,8 +149,6 @@ fun MessageStream(
     /** 正在编辑的消息 id：其它消息淡化到 0.9、点一下取消编辑 */
     editingId: String? = null,
     onCancelEdit: () -> Unit = {},
-    /** 「选择文本」→ 打开「选择文字」面板（宿主负责弹面板） */
-    onSelectTextSheet: (MessageUi) -> Unit = {},
 ) {
     // 自动跟随：用户停在底部时，新内容到达自动滚到底；一旦手动上滑即暂停跟随
     val listState = rememberLazyListState()
@@ -220,7 +218,6 @@ fun MessageStream(
                         selection = selection?.takeIf { it.messageId == message.id },
                         onSelectionChange = onSelectionChange,
                         onEdit = { onEdit(message) },
-                        onSelectTextSheet = { onSelectTextSheet(message) },
                     )
                     ChatRole.Assistant -> AssistantMessage(
                         message = message,
@@ -241,7 +238,6 @@ fun MessageStream(
                         onSourcesClick = { onSourcesClick(message) },
                         onBranchPrev = { onBranchPrev(message) },
                         onBranchNext = { onBranchNext(message) },
-                        onSelectTextSheet = { onSelectTextSheet(message) },
                     )
                 }
             }
@@ -257,7 +253,6 @@ private fun UserMessage(
     selection: MessageSelection?,
     onSelectionChange: (MessageSelection?) -> Unit,
     onEdit: () -> Unit,
-    onSelectTextSheet: () -> Unit = {},
 ) {
     val colors = DsTheme.colors
     var textView by remember { mutableStateOf<TextView?>(null) }
@@ -276,7 +271,6 @@ private fun UserMessage(
             // 选择模式下手势交给文本自身（拖手柄 / 长按换词），不能再弹消息菜单
             enabled = selection == null,
             onEdit = onEdit,
-            onSelectTextSheet = onSelectTextSheet,
             onSelectText = { pressWindow ->
                 // 把长按处的窗口坐标换算到 TextView 内部，定位它落在哪一段
                 val anchor = textView?.let { tv ->
@@ -1153,7 +1147,6 @@ private fun AssistantMessage(
     onSourcesClick: () -> Unit,
     onBranchPrev: () -> Unit,
     onBranchNext: () -> Unit,
-    onSelectTextSheet: () -> Unit = {},
 ) {
     val colors = DsTheme.colors
     val streaming = message.status == MessageStatus.Streaming || message.status == MessageStatus.Reasoning
@@ -1199,15 +1192,13 @@ private fun AssistantMessage(
             anchorY = pressY,
             onExpandedChange = { menuExpanded.value = it },
             onRegenerate = onRegenerate,
-            onSelectTextSheet = onSelectTextSheet,
             onSelectText = {
-                // 与 APK 一致：按长按点命中“词”，而不是整段/整块。
-                // 这样进入选择态后拖左右手柄才是从词边界开始扩展。
+                // 就地选择：长按点落在哪一段（按段落/行边界扩），进选择态后直接预选这一段，
+                // 再用手柄往两边扩。不再弹独立的「选择文字」面板。
                 val range = textView?.let { tv ->
                     val local = pressWindow - viewOrigin
                     val offset = tv.getOffsetForPosition(local.x, local.y)
-                    val bounds = wordBoundsAt(tv, offset)
-                    TextRange(bounds.first, bounds.second)
+                    expandParagraph(message.text, offset)
                 }?.takeIf { it.end > it.start }
                     ?: TextRange(0, message.text.length)
                 onSelectionChange(MessageSelection(message.id, message.text, range))
