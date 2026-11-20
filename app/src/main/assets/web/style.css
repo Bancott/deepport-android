@@ -1,4 +1,4 @@
-html, body {
+﻿html, body {
   margin: 0;
   padding: 0;
   background: transparent;
@@ -52,7 +52,7 @@ html, body {
   padding: 1px 5px;
 }
 
-.ds-markdown pre.ds-code-block {
+.ds-markdown pre.md-code-block {
   margin: 0 0 16px;
   padding: 10px 16px;
   background: var(--codeBg);
@@ -60,7 +60,7 @@ html, body {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-.ds-markdown pre.ds-code-block code {
+.ds-markdown pre.md-code-block code {
   display: block;
   background: transparent;
   padding: 0;
@@ -101,3 +101,10 @@ html, body {
 .ds-markdown .ds-markdown-html { color: var(--fg); }
 .ds-markdown img { max-width: 100%; }
 .ds-markdown del { color: var(--fg2); }
+
+/* 代码块：语言 + 复制 头 */
+.md-code-bar { display:flex; align-items:center; justify-content:space-between; background: var(--codeBg); border-radius: 12px 12px 0 0; padding: 6px 12px; margin: 4px 0 0; }
+.md-code-lang { font-size: 12px; color: var(--fg2); font-family: 'Roboto Mono', monospace; }
+.md-code-copy { background: transparent; border: none; padding: 2px 6px; font-size: 12px; color: var(--link); }
+.md-code-bar + pre.md-code-block { margin-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+

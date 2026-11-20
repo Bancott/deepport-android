@@ -1,46 +1,65 @@
 ﻿package io.github.bancott.deepport.ui.chat.web
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.Color as AndroidColor
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import io.github.bancott.deepport.ui.theme.DsDarkColors
 import io.github.bancott.deepport.ui.theme.DsTheme
 import org.json.JSONObject
+import kotlin.math.max
 
 /**
- * 用本地 WebView 渲染 AI 回答终稿：markdown-it + KaTeX + highlight.js。
+ * 回答正文统一用本地 WebView 渲染（chat-demo 同源渲染栈：micromark + llm-math + KaTeX + Prism）。
  *
- * - 只用于「已完成且含富内容（公式/表格/代码/SVG）」的回答；流式与纯文本仍走原生。
- * - 高度由网页回传，WebView 自身不滚动，滚动交给外层 LazyColumn。
- * - 文本选择用 WebView 原生选择（系统手柄 + 系统工具栏）。
+ * - 流式与终稿是同一个 WebView，不做原生→网页切换，避免"闪一下"；
+ * - 流式期间按 180ms 节流重渲染，终稿立即渲染一次；
+ * - 高度由网页回传；测量完成前先按文本量估一个高度，避免从 0 撑开造成跳动；
+ * - 代码块带语言标签 + 复制；文本选择用 WebView 原生选择。
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun WebMessageView(
     markdown: String,
     modifier: Modifier = Modifier,
+    streaming: Boolean = false,
 ) {
     val colors = DsTheme.colors
     val density = LocalDensity.current
+    val context = LocalContext.current
     var heightPx by remember { mutableIntStateOf(0) }
+    var lastRenderAt by remember { mutableLongStateOf(0L) }
+    var lastRendered by remember { mutableStateOf<String?>(null) }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val bgArgb = colors.bg.toArgb()
+
+    // 首次测量前的高度估计：按行数与每行字符数粗算，避免 0 高度闪一下
+    val estimatedPx = remember(markdown, density) {
+        val linePx = with(density) { 28.dp.toPx() }
+        val lines = markdown.count { it == '\n' } + markdown.length / 22 + 1
+        (max(2, lines) * linePx).toInt()
+    }
 
     val themeJs = remember(colors) {
         val fg = hex(colors.textPrimary.toArgb())
@@ -52,11 +71,10 @@ fun WebMessageView(
     }
 
     AndroidView(
-        modifier = modifier
-            .then(if (heightPx > 0) Modifier.height(with(density) { heightPx.toDp() }) else Modifier.wrapContentHeight()),
+        modifier = modifier.height(with(density) { (if (heightPx > 0) heightPx else estimatedPx).toDp() }),
         factory = { ctx ->
             WebView(ctx).apply {
-                setBackgroundColor(AndroidColor.TRANSPARENT)
+                setBackgroundColor(bgArgb)
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
@@ -65,8 +83,6 @@ fun WebMessageView(
                     setSupportZoom(false)
                     builtInZoomControls = false
                     displayZoomControls = false
-                    loadWithOverviewMode = false
-                    useWideViewPort = false
                 }
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
@@ -75,7 +91,15 @@ fun WebMessageView(
                         @JavascriptInterface
                         fun onHeight(h: Int) {
                             mainHandler.post {
-                                if (h > 0 && h != heightPx) heightPx = h
+                                if (h > 0) heightPx = h
+                            }
+                        }
+
+                        @JavascriptInterface
+                        fun copy(text: String) {
+                            mainHandler.post {
+                                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                cm.setPrimaryClip(ClipData.newPlainText("code", text))
                             }
                         }
                     },
@@ -86,14 +110,20 @@ fun WebMessageView(
                         view ?: return
                         view.evaluateJavascript(themeJs, null)
                         view.evaluateJavascript("window.render(${JSONObject.quote(markdown)})", null)
+                        lastRendered = markdown
                     }
                 }
                 loadUrl("file:///android_asset/web/message.html")
             }
         },
         update = { view ->
-            // 内容或主题变化：只重渲染，不重建 WebView
             view.evaluateJavascript(themeJs, null)
+            if (lastRendered == markdown) return@AndroidView
+            val now = SystemClock.uptimeMillis()
+            // 流式期间节流，终稿立即渲染
+            if (streaming && now - lastRenderAt < 180L) return@AndroidView
+            lastRenderAt = now
+            lastRendered = markdown
             view.evaluateJavascript("window.render(${JSONObject.quote(markdown)})", null)
         },
         onRelease = { it.destroy() },

@@ -247,10 +247,6 @@ fun MessageStream(
                     )
                     ChatRole.Assistant -> AssistantMessage(
                         message = message,
-                        selection = selection?.takeIf { it.messageId == message.id },
-                        onSelectionChange = onSelectionChange,
-                        onSelectionBounds = onSelectionBounds,
-                        onSpeakSelection = onSpeakSelection,
                         sessionTokens = sessionTokens,
                         readingState = if (message.id == readingMessageId) {
                             readingState
@@ -923,10 +919,6 @@ private fun blockRangeAt(markdown: String, offset: Int, m: SpanMetrics): TextRan
 @Composable
 private fun AssistantMessage(
     message: MessageUi,
-    selection: MessageSelection?,
-    onSelectionChange: (MessageSelection?) -> Unit,
-    onSelectionBounds: (Rect) -> Unit,
-    onSpeakSelection: (String) -> Unit,
     sessionTokens: Int,
     readingState: ReadAloudState,
     onToggleReasoning: () -> Unit,
@@ -942,33 +934,11 @@ private fun AssistantMessage(
     val colors = DsTheme.colors
     val streaming = message.status == MessageStatus.Streaming || message.status == MessageStatus.Reasoning
     var columnOrigin by remember { mutableStateOf(Offset.Zero) }
-    var textView by remember { mutableStateOf<TextView?>(null) }
-    var viewOrigin by remember { mutableStateOf(Offset.Zero) }
-    val selecting = selection != null
-    // 终稿且含公式/表格/代码/SVG 时交给 WebView 渲染；流式与纯文本继续原生
-    val rich = message.status == MessageStatus.Completed && isRichMarkdown(message.text)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 24.dp, end = 24.dp, top = 16.dp)
-            .onGloballyPositioned { columnOrigin = it.positionInWindow() }
-            .then(
-                // 回答不再有长按菜单：长按直接进系统选择。
-                // 用 Compose 手势而不是让 TextView 常驻可选，避免它吃掉滑动、把列表滚动挡掉。
-                if (!selecting && !rich) {
-                    Modifier.pointerInput(message.id) {
-                        detectTapGestures(
-                            onLongPress = { o ->
-                                onSelectionChange(
-                                    MessageSelection(message.id, message.text, columnOrigin + o),
-                                )
-                            },
-                        )
-                    }
-                } else {
-                    Modifier
-                },
-            ),
+            .onGloballyPositioned { columnOrigin = it.positionInWindow() },
     ) {
         if (message.reasoning.isNotBlank() || message.status == MessageStatus.Reasoning) {
             ReasoningSection(
@@ -985,27 +955,12 @@ private fun AssistantMessage(
             MessageStatus.Failed -> ErrorTurn(hint = message.errorHint ?: "请检查网络后重试", onRetry = onRetry)
             else -> {
                 if (message.text.isNotEmpty()) {
-                    if (rich) {
-                        // 终稿富内容：WebView 渲染（公式/表格/代码/SVG + 原生选择）
-                        WebMessageView(
-                            markdown = message.text,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        MessageBodyText(
-                            text = message.text,
-                            markdown = true,
-                            selecting = selecting,
-                            pressWindow = selection?.pressWindow,
-                            color = colors.textPrimary,
-                            onViewReady = { textView = it },
-                            onViewOrigin = { viewOrigin = it },
-                            onSelectionFinished = { onSelectionChange(null) },
-                            onSelectionBounds = onSelectionBounds,
-                            onSpeakSelection = onSpeakSelection,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
+                    // 回答统一用 WebView 渲染：流式/终稿同一个视图，不再原生→网页切换，避免闪一下
+                    WebMessageView(
+                        markdown = message.text,
+                        streaming = streaming,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }
