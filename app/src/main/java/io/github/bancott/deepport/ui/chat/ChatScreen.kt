@@ -104,6 +104,8 @@ fun ChatScreen(
     onToggleReasoning: (MessageUi) -> Unit = {},
     onCopyMessage: (MessageUi) -> Unit = {},
     onSpeakMessage: (MessageUi) -> Unit = {},
+    /// 选区朗读：系统选择工具栏里的「朗读」，走 App 内置 TTS
+    onSpeakSelection: (String) -> Unit = {},
     onShareMessage: (MessageUi) -> Unit = {},
     onRegenerate: (MessageUi) -> Unit = {},
     onRetryMessage: (MessageUi) -> Unit = {},
@@ -257,6 +259,7 @@ fun ChatScreen(
                             if (sel != null) selectionStartedAt = System.currentTimeMillis()
                         },
                         onSelectionBounds = { selectionBounds = it },
+                        onSpeakSelection = onSpeakSelection,
                         readingMessageId = state.readingMessageId,
                         readingState = state.readingState,
                         onToggleReasoning = onToggleReasoning,

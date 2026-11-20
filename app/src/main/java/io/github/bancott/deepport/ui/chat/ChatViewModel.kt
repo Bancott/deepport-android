@@ -1,4 +1,4 @@
-﻿package io.github.bancott.deepport.ui.chat
+package io.github.bancott.deepport.ui.chat
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -295,23 +295,28 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(isSpeechOutputOn = enabled) }
     }
 
+    fun speakMessage(message: MessageUi): Boolean =
+        startSpeaking(TtsPlayer.plainText(message.text), message.id)
+
+    /** 朗读系统选区里的文字：走同一套 App 内置 TTS（不是系统 TTS） */
+    fun speakSelection(raw: String): Boolean = startSpeaking(TtsPlayer.plainText(raw), null)
+
     /**
      * 动作条的喇叭：朗读这一条回答；没有正文时返回 false 让 UI 给个提示。
      * 正在读同一条时再点 = 停止；读别的消息时先停旧的再起新的。
      */
-    fun speakMessage(message: MessageUi): Boolean {
-        val text = TtsPlayer.plainText(message.text)
+    private fun startSpeaking(text: String, messageId: String?): Boolean {
         if (text.isBlank()) return false
         val current = _state.value
         if (current.readingState != ReadAloudState.Idle) {
             tts.stop()
-            if (current.readingMessageId == message.id) return true
+            if (messageId != null && current.readingMessageId == messageId) return true
         }
         if (settings.apiKey.isBlank()) {
             _state.update { it.copy(speechError = "请先在「设置 → 模型设置」填写 API Key") }
             return true
         }
-        _state.update { it.copy(readingMessageId = message.id) }
+        _state.update { it.copy(readingMessageId = messageId) }
         // 贝壳 / 白浪 是官方 App 的内测音色，/v1/tools/tts 只开放 stella / tide，
         // 直接提交会 400。这里回退到海星，并说明一句，别让它变成"朗读失败"。
         val requested = settings.ttsVoice

@@ -1,4 +1,4 @@
-﻿package io.github.bancott.deepport.ui.chat
+package io.github.bancott.deepport.ui.chat
 
 import io.github.bancott.deepport.R
 
@@ -117,6 +117,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import io.github.bancott.deepport.ui.chat.markdown.MdBlock
+import io.github.bancott.deepport.ui.chat.web.WebMessageView
 import io.github.bancott.deepport.ui.chat.markdown.parseMarkdown
 import io.github.bancott.deepport.ui.common.GlobeGlyph
 import io.github.bancott.deepport.ui.common.ReadingBars
@@ -134,6 +135,16 @@ data class MessageSelection(
     val pressWindow: Offset,
 )
 
+/** 是否含需要 WebView 才能渲染的富内容：公式、GFM 表格、代码块、SVG */
+internal fun isRichMarkdown(text: String): Boolean {
+    if (text.contains("$$")) return true
+    if (text.contains("<svg", ignoreCase = true)) return true
+    if (text.contains("```")) return true
+    if (Regex("\\$[^$\\n]{1,200}\\$").containsMatchIn(text)) return true
+    val tableLines = text.lineSequence().count { it.trimStart().startsWith("|") }
+    return tableLines >= 2
+}
+
 /** 会话消息流：LazyColumn + 稳定 key，用户气泡与 AI 通栏回答两种形态。 */
 @Composable
 fun MessageStream(
@@ -146,6 +157,8 @@ fun MessageStream(
     onSelectionChange: (MessageSelection?) -> Unit = {},
     /** 选择模式下拉起时回报正文在窗口里的矩形，供「点选区外退出」判断 */
     onSelectionBounds: (Rect) -> Unit = {},
+    /** 系统选择工具栏的「朗读」：读选区，走 App 内置 TTS */
+    onSpeakSelection: (String) -> Unit = {},
     onToggleReasoning: (MessageUi) -> Unit = {},
     onCopy: (MessageUi) -> Unit = {},
     onSpeak: (MessageUi) -> Unit = {},
@@ -228,6 +241,7 @@ fun MessageStream(
                         selection = selection?.takeIf { it.messageId == message.id },
                         onSelectionChange = onSelectionChange,
                         onSelectionBounds = onSelectionBounds,
+                        onSpeakSelection = onSpeakSelection,
                         onEdit = { onEdit(message) },
                     )
                     ChatRole.Assistant -> AssistantMessage(
@@ -235,6 +249,7 @@ fun MessageStream(
                         selection = selection?.takeIf { it.messageId == message.id },
                         onSelectionChange = onSelectionChange,
                         onSelectionBounds = onSelectionBounds,
+                        onSpeakSelection = onSpeakSelection,
                         sessionTokens = sessionTokens,
                         readingState = if (message.id == readingMessageId) {
                             readingState
@@ -265,6 +280,7 @@ private fun UserMessage(
     selection: MessageSelection?,
     onSelectionChange: (MessageSelection?) -> Unit,
     onSelectionBounds: (Rect) -> Unit,
+    onSpeakSelection: (String) -> Unit,
     onEdit: () -> Unit,
 ) {
     val colors = DsTheme.colors
@@ -314,6 +330,7 @@ private fun UserMessage(
                             onViewOrigin = { viewOrigin = it },
                             onSelectionFinished = { onSelectionChange(null) },
                             onSelectionBounds = onSelectionBounds,
+                            onSpeakSelection = onSpeakSelection,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                         )
                     }
@@ -324,15 +341,11 @@ private fun UserMessage(
 }
 
 /**
- * 消息正文的唯一渲染通道。
+ * 消息正文渲染 + App 内自绘选择。
  *
- * 默认是普通 TextView，不参与文本选择；只有长按菜单点了「选择文本」之后，才把这一条切到
- * **系统原生选择模式**：选区手柄、放大镜、ActionMode 工具栏全部交给 Android，
- * App 不再自绘手柄、高亮和「复制/全选/分享」浮层。
- *
- * 进入方式：开启 textIsSelectable + requestFocus 后，在长按点合成一次长按
- * （DOWN 保持 600ms 再 UP）——系统只在用户手势长按时拉起 ActionMode，
- * 单纯 setSelection 往往只出手柄、不出工具栏。
+ * 普通态就是一个 TextView（Spannable markdown）；长按菜单点「选择文本」后进入选择态：
+ * 预选长按处所在段落，画选区高亮、两个可拖手柄和「复制 / 全选 / 朗读」浮层。
+ * 选择完全在 App 内实现（NativeSelectionLayer），不依赖 textIsSelectable / 系统 ActionMode。
  */
 @Composable
 private fun MessageBodyText(
@@ -345,22 +358,52 @@ private fun MessageBodyText(
     onViewOrigin: (Offset) -> Unit = {},
     onSelectionFinished: () -> Unit = {},
     onSelectionBounds: (Rect) -> Unit = {},
+    onSpeakSelection: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
     val colors = DsTheme.colors
     val density = LocalDensity.current
+    val context = LocalContext.current
+    val isDark = colors === DsDarkColors
     val textColor = color.toArgb()
+    val highlightArgb = (if (isDark) Color(0xFF33426B) else Color(0x664C6EF6)).toArgb()
+    val handleColor = if (isDark) Color(0xFF6599FE) else Color(0xFF4C6EF6)
     val metrics = remember(colors, density, compact) { SpanMetrics(density, colors, compact) }
     val content = remember(text, markdown, metrics) {
         buildBodySpannable(text, markdown, metrics)
     }
     var tv by remember { mutableStateOf<TextView?>(null) }
     var armed by remember { mutableStateOf(false) }
+    var range by remember { mutableStateOf<TextRange?>(null) }
+    var boxOrigin by remember { mutableStateOf(Offset.Zero) }
     val finished by rememberUpdatedState(onSelectionFinished)
     val boundsReport by rememberUpdatedState(onSelectionBounds)
+    val speak by rememberUpdatedState(onSpeakSelection)
 
-    Box(modifier = modifier) {
+    fun paintHighlight(r: TextRange?) {
+        val sp = tv?.text as? Spannable ?: return
+        sp.getSpans(0, sp.length, BackgroundColorSpan::class.java).forEach(sp::removeSpan)
+        if (r != null && r.length > 0) {
+            val s = r.start.coerceIn(0, sp.length)
+            val e = r.end.coerceIn(s, sp.length)
+            if (e > s) {
+                sp.setSpan(
+                    BackgroundColorSpan(highlightArgb),
+                    s,
+                    e,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+            }
+        }
+    }
+
+    // 选区变化后重挂高亮（内容重建后也要补一次）
+    LaunchedEffect(range, content, tv) { paintHighlight(range) }
+
+    Box(
+        modifier = modifier.onGloballyPositioned { boxOrigin = it.positionInWindow() },
+    ) {
         AndroidView<TextView>(
             factory = { ctx ->
                 TextView(ctx).apply {
@@ -370,15 +413,6 @@ private fun MessageBodyText(
                     setTextSize(TypedValue.COMPLEX_UNIT_PX, metrics.textPx)
                     showSoftInputOnFocus = false
                     setText(content, TextView.BufferType.SPANNABLE)
-                    // 只用于感知系统选择结束：默认菜单项一个不动
-                    setCustomSelectionActionModeCallback(object : ActionMode.Callback {
-                        override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean = true
-                        override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean = false
-                        override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean = false
-                        override fun onDestroyActionMode(mode: ActionMode?) {
-                            finished()
-                        }
-                    })
                 }
             },
             update = { view ->
@@ -389,11 +423,7 @@ private fun MessageBodyText(
                 }
                 if (selecting && !armed) {
                     armed = true
-                    view.setTextIsSelectable(true)
-                    view.requestFocus()
-                    // 等一帧布局完成后再合成触摸，否则 view.width/height 可能还是 0
                     view.postDelayed({
-                        val local = textPointFor(view, pressWindow)
                         val loc = IntArray(2)
                         view.getLocationInWindow(loc)
                         boundsReport(
@@ -404,40 +434,70 @@ private fun MessageBodyText(
                                 (loc[1] + view.height).toFloat(),
                             ),
                         )
-                        synthesizeLongPress(view, local)
-                    }, 180)
+                        val local = textPointFor(view, pressWindow)
+                        val offset = view.getOffsetForPosition(local.x, local.y)
+                        range = paragraphRange(view.text.toString(), offset)
+                    }, 60)
                 } else if (!selecting && armed) {
                     armed = false
-                    view.clearFocus()
-                    view.setTextIsSelectable(false)
+                    range = null
+                    paintHighlight(null)
                 }
             },
             modifier = (if (markdown) Modifier.fillMaxWidth() else Modifier)
                 .onGloballyPositioned { onViewOrigin(it.positionInWindow()) },
         )
+
+        val view = tv
+        val sel = range
+        if (view != null && sel != null && sel.length > 0) {
+            val loc = IntArray(2)
+            view.getLocationInWindow(loc)
+            val origin = Offset(loc[0] - boxOrigin.x, loc[1] - boxOrigin.y)
+            NativeSelectionLayer(
+                view = view,
+                range = sel,
+                origin = origin,
+                handleColor = handleColor,
+                onRangeChange = { range = it },
+                onCopy = {
+                    val s = sel.start.coerceIn(0, view.text.length)
+                    val e = sel.end.coerceIn(s, view.text.length)
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("selection", view.text.subSequence(s, e)))
+                    finished()
+                },
+                onSelectAll = {
+                    range = TextRange(0, view.text.length)
+                },
+                onSpeak = {
+                    val s = sel.start.coerceIn(0, view.text.length)
+                    val e = sel.end.coerceIn(s, view.text.length)
+                    speak(view.text.subSequence(s, e).toString())
+                    finished()
+                },
+                onDismiss = { finished() },
+            )
+        }
     }
 }
 
-/**
- * 在指定坐标合成一次长按：DOWN → 600ms → UP。
- * TextView 的长按识别器会在 500ms 左右把系统选择拉起来（手柄 + ActionMode）。
- */
-private fun synthesizeLongPress(view: TextView, local: Offset) {
-    if (view.width <= 0 || view.height <= 0) return
-    val now = SystemClock.uptimeMillis()
-    val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, local.x, local.y, 0)
-    view.dispatchTouchEvent(down)
-    down.recycle()
-    view.postDelayed({
-        val up = MotionEvent.obtain(now, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, local.x, local.y, 0)
-        view.dispatchTouchEvent(up)
-        up.recycle()
-    }, 800)
+/** 由字符位置扩到所在段落（换行边界） */
+private fun paragraphRange(text: String, anchor: Int): TextRange {
+    if (text.isEmpty()) return TextRange(0)
+    val a = anchor.coerceIn(0, text.length)
+    var start = a
+    while (start > 0 && text[start - 1] != '\n') start--
+    var end = a
+    while (end < text.length && text[end] != '\n') end++
+    while (start < end && text[start].isWhitespace()) start++
+    while (end > start && text[end - 1].isWhitespace()) end--
+    return if (start < end) TextRange(start, end) else TextRange(0, text.length)
 }
 
 /**
  * 把长按点换算成 TextView 内部坐标，并夹到「真正有文字」的那一行里：
- * 长按可能落在段间空白、代码块内边距这类非文字区域，直接拿原坐标合成触摸会选不中。
+ * 长按可能落在段间空白、代码块内边距这类非文字区域。
  */
 private fun textPointFor(view: TextView, pressWindow: Offset?): Offset {
     val loc = IntArray(2)
@@ -457,6 +517,7 @@ private fun textPointFor(view: TextView, pressWindow: Offset?): Offset {
     val cy = y.coerceIn(top, (bottom - 1f).coerceAtLeast(top))
     return Offset(cx, cy)
 }
+
 
 /**
  * Markdown → Spannable 用的全部排版常量，数值与原 Compose 版 MarkdownText 同源：
@@ -864,6 +925,7 @@ private fun AssistantMessage(
     selection: MessageSelection?,
     onSelectionChange: (MessageSelection?) -> Unit,
     onSelectionBounds: (Rect) -> Unit,
+    onSpeakSelection: (String) -> Unit,
     sessionTokens: Int,
     readingState: ReadAloudState,
     onToggleReasoning: () -> Unit,
@@ -878,33 +940,27 @@ private fun AssistantMessage(
 ) {
     val colors = DsTheme.colors
     val streaming = message.status == MessageStatus.Streaming || message.status == MessageStatus.Reasoning
-    val menuExpanded = remember { mutableStateOf(false) }
-    val density = LocalDensity.current
-    var pressX by remember { mutableStateOf(0.dp) }
-    var pressY by remember { mutableStateOf(0.dp) }
     var columnOrigin by remember { mutableStateOf(Offset.Zero) }
-    // 长按点的窗口坐标（完整 x/y），供「选择文本」定位被按的那一段
-    var pressWindow by remember { mutableStateOf(Offset.Zero) }
     var textView by remember { mutableStateOf<TextView?>(null) }
     var viewOrigin by remember { mutableStateOf(Offset.Zero) }
-    // 与正文渲染同源的排版常量：把长按点换算成块级选区时要用
-    val metrics = remember(colors, density) { SpanMetrics(density, colors) }
+    val selecting = selection != null
+    // 终稿且含公式/表格/代码/SVG 时交给 WebView 渲染；流式与纯文本继续原生
+    val rich = message.status == MessageStatus.Completed && isRichMarkdown(message.text)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 24.dp, end = 24.dp, top = 16.dp)
             .onGloballyPositioned { columnOrigin = it.positionInWindow() }
             .then(
-                // 选择模式下手势交给文本自身，避免长按又弹菜单把选区打断
-                if (selection == null) {
-                    // 记录长按点，菜单才会出现在手指附近，而不是整块回答的左上角
+                // 回答不再有长按菜单：长按直接进系统选择。
+                // 用 Compose 手势而不是让 TextView 常驻可选，避免它吃掉滑动、把列表滚动挡掉。
+                if (!selecting && !rich) {
                     Modifier.pointerInput(message.id) {
                         detectTapGestures(
                             onLongPress = { o ->
-                                pressX = with(density) { o.x.toDp() }
-                                pressY = with(density) { o.y.toDp() }
-                                pressWindow = columnOrigin + o
-                                menuExpanded.value = true
+                                onSelectionChange(
+                                    MessageSelection(message.id, message.text, columnOrigin + o),
+                                )
                             },
                         )
                     }
@@ -913,18 +969,6 @@ private fun AssistantMessage(
                 },
             ),
     ) {
-        MessageMenuPopup(
-            message = message,
-            expanded = menuExpanded.value,
-            anchorX = pressX,
-            anchorY = pressY,
-            onExpandedChange = { menuExpanded.value = it },
-            onRegenerate = onRegenerate,
-            onSelectText = {
-                // 交给系统：只记长按点，进入选择模式后由 Android 决定初始选区和工具栏
-                onSelectionChange(MessageSelection(message.id, message.text, pressWindow))
-            },
-        )
         if (message.reasoning.isNotBlank() || message.status == MessageStatus.Reasoning) {
             ReasoningSection(
                 message = message,
@@ -940,19 +984,27 @@ private fun AssistantMessage(
             MessageStatus.Failed -> ErrorTurn(hint = message.errorHint ?: "请检查网络后重试", onRetry = onRetry)
             else -> {
                 if (message.text.isNotEmpty()) {
-                    // 普通态与选择态共用同一个 TextView：进入选择时排版一个像素都不会动
-                    MessageBodyText(
-                        text = message.text,
-                        markdown = true,
-                        selecting = selection != null,
-                        pressWindow = selection?.pressWindow,
-                        color = colors.textPrimary,
-                        onViewReady = { textView = it },
-                        onViewOrigin = { viewOrigin = it },
-                        onSelectionFinished = { onSelectionChange(null) },
-                        onSelectionBounds = onSelectionBounds,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    if (rich) {
+                        // 终稿富内容：WebView 渲染（公式/表格/代码/SVG + 原生选择）
+                        WebMessageView(
+                            markdown = message.text,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        MessageBodyText(
+                            text = message.text,
+                            markdown = true,
+                            selecting = selecting,
+                            pressWindow = selection?.pressWindow,
+                            color = colors.textPrimary,
+                            onViewReady = { textView = it },
+                            onViewOrigin = { viewOrigin = it },
+                            onSelectionFinished = { onSelectionChange(null) },
+                            onSelectionBounds = onSelectionBounds,
+                            onSpeakSelection = onSpeakSelection,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }

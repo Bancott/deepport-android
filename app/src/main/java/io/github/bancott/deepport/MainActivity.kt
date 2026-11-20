@@ -1,4 +1,4 @@
-package io.github.bancott.deepport
+﻿package io.github.bancott.deepport
 
 import android.os.Bundle
 import android.content.ClipData
@@ -578,6 +578,7 @@ private fun App(isDark: Boolean) {
                     clipboard.setPrimaryClip(ClipData.newPlainText("message", message.text))
                     Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
                 },
+                onSpeakSelection = { text -> vm.speakSelection(text) },
                 onSpeakMessage = { message ->
                     if (!vm.speakMessage(message)) {
                         Toast.makeText(context, "这条回答还没有可朗读的正文", Toast.LENGTH_SHORT).show()
