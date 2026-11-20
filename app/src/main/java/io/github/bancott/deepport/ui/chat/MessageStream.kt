@@ -1,4 +1,4 @@
-package io.github.bancott.deepport.ui.chat
+﻿package io.github.bancott.deepport.ui.chat
 
 import io.github.bancott.deepport.R
 
@@ -88,6 +88,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path as ComposePath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -143,6 +144,8 @@ fun MessageStream(
     readingState: ReadAloudState = ReadAloudState.Idle,
     selection: MessageSelection? = null,
     onSelectionChange: (MessageSelection?) -> Unit = {},
+    /** 选择模式下拉起时回报正文在窗口里的矩形，供「点选区外退出」判断 */
+    onSelectionBounds: (Rect) -> Unit = {},
     onToggleReasoning: (MessageUi) -> Unit = {},
     onCopy: (MessageUi) -> Unit = {},
     onSpeak: (MessageUi) -> Unit = {},
@@ -224,12 +227,14 @@ fun MessageStream(
                         message = message,
                         selection = selection?.takeIf { it.messageId == message.id },
                         onSelectionChange = onSelectionChange,
+                        onSelectionBounds = onSelectionBounds,
                         onEdit = { onEdit(message) },
                     )
                     ChatRole.Assistant -> AssistantMessage(
                         message = message,
                         selection = selection?.takeIf { it.messageId == message.id },
                         onSelectionChange = onSelectionChange,
+                        onSelectionBounds = onSelectionBounds,
                         sessionTokens = sessionTokens,
                         readingState = if (message.id == readingMessageId) {
                             readingState
@@ -259,6 +264,7 @@ private fun UserMessage(
     message: MessageUi,
     selection: MessageSelection?,
     onSelectionChange: (MessageSelection?) -> Unit,
+    onSelectionBounds: (Rect) -> Unit,
     onEdit: () -> Unit,
 ) {
     val colors = DsTheme.colors
@@ -307,6 +313,7 @@ private fun UserMessage(
                             onViewReady = { textView = it },
                             onViewOrigin = { viewOrigin = it },
                             onSelectionFinished = { onSelectionChange(null) },
+                            onSelectionBounds = onSelectionBounds,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                         )
                     }
@@ -337,6 +344,7 @@ private fun MessageBodyText(
     onViewReady: (TextView) -> Unit = {},
     onViewOrigin: (Offset) -> Unit = {},
     onSelectionFinished: () -> Unit = {},
+    onSelectionBounds: (Rect) -> Unit = {},
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
@@ -350,6 +358,7 @@ private fun MessageBodyText(
     var tv by remember { mutableStateOf<TextView?>(null) }
     var armed by remember { mutableStateOf(false) }
     val finished by rememberUpdatedState(onSelectionFinished)
+    val boundsReport by rememberUpdatedState(onSelectionBounds)
 
     Box(modifier = modifier) {
         AndroidView<TextView>(
@@ -380,15 +389,23 @@ private fun MessageBodyText(
                 }
                 if (selecting && !armed) {
                     armed = true
-                    val local = pressWindow?.let { p ->
-                        // 窗口坐标 → TextView 内部坐标（Compose 的窗口坐标与 Activity window 同一套）
-                        val loc = IntArray(2)
-                        view.getLocationInWindow(loc)
-                        Offset(p.x - loc[0], p.y - loc[1])
-                    } ?: Offset(view.width / 2f, view.height / 2f)
                     view.setTextIsSelectable(true)
                     view.requestFocus()
-                    view.post { synthesizeLongPress(view, local) }
+                    // 等一帧布局完成后再合成触摸，否则 view.width/height 可能还是 0
+                    view.postDelayed({
+                        val local = textPointFor(view, pressWindow)
+                        val loc = IntArray(2)
+                        view.getLocationInWindow(loc)
+                        boundsReport(
+                            Rect(
+                                loc[0].toFloat(),
+                                loc[1].toFloat(),
+                                (loc[0] + view.width).toFloat(),
+                                (loc[1] + view.height).toFloat(),
+                            ),
+                        )
+                        synthesizeLongPress(view, local)
+                    }, 180)
                 } else if (!selecting && armed) {
                     armed = false
                     view.clearFocus()
@@ -406,6 +423,7 @@ private fun MessageBodyText(
  * TextView 的长按识别器会在 500ms 左右把系统选择拉起来（手柄 + ActionMode）。
  */
 private fun synthesizeLongPress(view: TextView, local: Offset) {
+    if (view.width <= 0 || view.height <= 0) return
     val now = SystemClock.uptimeMillis()
     val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, local.x, local.y, 0)
     view.dispatchTouchEvent(down)
@@ -414,7 +432,30 @@ private fun synthesizeLongPress(view: TextView, local: Offset) {
         val up = MotionEvent.obtain(now, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, local.x, local.y, 0)
         view.dispatchTouchEvent(up)
         up.recycle()
-    }, 600)
+    }, 800)
+}
+
+/**
+ * 把长按点换算成 TextView 内部坐标，并夹到「真正有文字」的那一行里：
+ * 长按可能落在段间空白、代码块内边距这类非文字区域，直接拿原坐标合成触摸会选不中。
+ */
+private fun textPointFor(view: TextView, pressWindow: Offset?): Offset {
+    val loc = IntArray(2)
+    view.getLocationInWindow(loc)
+    val raw = pressWindow?.let { Offset(it.x - loc[0], it.y - loc[1]) }
+        ?: Offset(view.width / 2f, view.height / 2f)
+    val layout = view.layout ?: return raw
+    if (layout.lineCount == 0) return raw
+    val x = raw.x.coerceIn(0f, (view.width - 1).coerceAtLeast(1).toFloat())
+    val y = raw.y.coerceIn(0f, (view.height - 1).coerceAtLeast(1).toFloat())
+    val line = layout.getLineForVertical(y.toInt()).coerceIn(0, layout.lineCount - 1)
+    val left = layout.getLineLeft(line)
+    val right = layout.getLineRight(line)
+    val top = layout.getLineTop(line).toFloat()
+    val bottom = layout.getLineBottom(line).toFloat()
+    val cx = if (right > left) x.coerceIn(left, right - 1f) else left
+    val cy = y.coerceIn(top, (bottom - 1f).coerceAtLeast(top))
+    return Offset(cx, cy)
 }
 
 /**
@@ -822,6 +863,7 @@ private fun AssistantMessage(
     message: MessageUi,
     selection: MessageSelection?,
     onSelectionChange: (MessageSelection?) -> Unit,
+    onSelectionBounds: (Rect) -> Unit,
     sessionTokens: Int,
     readingState: ReadAloudState,
     onToggleReasoning: () -> Unit,
@@ -908,6 +950,7 @@ private fun AssistantMessage(
                         onViewReady = { textView = it },
                         onViewOrigin = { viewOrigin = it },
                         onSelectionFinished = { onSelectionChange(null) },
+                        onSelectionBounds = onSelectionBounds,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

@@ -1,4 +1,4 @@
-package io.github.bancott.deepport.ui.chat
+﻿package io.github.bancott.deepport.ui.chat
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedVisibility
@@ -12,6 +12,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.runtime.mutableIntStateOf
@@ -122,6 +127,9 @@ fun ChatScreen(
     // 正在原地选中的那条消息；点空白处即取消
     var messageSelection by remember { mutableStateOf<MessageSelection?>(null) }
     var selectionStartedAt by remember { mutableLongStateOf(0L) }
+    // 被选中正文在窗口里的矩形：点在这个矩形外才退出选择（拖手柄不会误清）
+    var selectionBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var rootOrigin by remember { mutableStateOf(Offset.Zero) }
     // 只在键盘"弹起"时收面板。原来写的是 imeBottomPx > 0，键盘收起途中每帧都 > 0，
     // 会把刚点加号打开的面板立刻关掉（表现为"点加号没反应"）。
     var lastImePx by remember { mutableIntStateOf(0) }
@@ -165,7 +173,27 @@ fun ChatScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.bg),
+            .background(colors.bg)
+            .onGloballyPositioned { rootOrigin = it.positionInWindow() }
+            // 选择态下点「正文矩形」以外的地方就退出：用 Initial pass 观察，
+            // 不等子节点消费，所以气泡、空白、顶栏都能触发；拖手柄的落点在矩形内，不会误清。
+            .pointerInput(messageSelection, selectionBounds) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.type != PointerEventType.Release) continue
+                        val sel = messageSelection ?: continue
+                        val bounds = selectionBounds ?: continue
+                        if (System.currentTimeMillis() - selectionStartedAt <= 300) continue
+                        val point = event.changes.firstOrNull()?.position ?: continue
+                        val inWindow = Offset(rootOrigin.x + point.x, rootOrigin.y + point.y)
+                        if (!bounds.contains(inWindow)) {
+                            messageSelection = null
+                            selectionBounds = null
+                        }
+                    }
+                }
+            },
     ) {
         Column(
             modifier = Modifier
@@ -228,6 +256,7 @@ fun ChatScreen(
                             messageSelection = sel
                             if (sel != null) selectionStartedAt = System.currentTimeMillis()
                         },
+                        onSelectionBounds = { selectionBounds = it },
                         readingMessageId = state.readingMessageId,
                         readingState = state.readingState,
                         onToggleReasoning = onToggleReasoning,
