@@ -6,6 +6,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
+import android.view.ActionMode
+import android.view.Menu
+import android.view.MenuItem
+import android.view.MotionEvent
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
@@ -62,6 +67,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.shape.CircleShape
@@ -119,11 +125,12 @@ import io.github.bancott.deepport.ui.theme.DsDarkColors
 import io.github.bancott.deepport.ui.theme.DsText
 import io.github.bancott.deepport.ui.theme.DsTheme
 
-/** 正在原地选中的那条消息：可读全文 + 初始选区 */
+/** 正在（系统选择模式）选中的那条消息：记住长按点，用它定位系统选择从哪开始 */
 data class MessageSelection(
     val messageId: String,
     val text: String,
-    val range: TextRange,
+    /** 长按点的窗口坐标；进入选择模式时换算成 TextView 内部坐标去合成长按 */
+    val pressWindow: Offset,
 )
 
 /** 会话消息流：LazyColumn + 稳定 key，用户气泡与 AI 通栏回答两种形态。 */
@@ -272,16 +279,12 @@ private fun UserMessage(
             enabled = selection == null,
             onEdit = onEdit,
             onSelectText = { pressWindow ->
-                // 把长按处的窗口坐标换算到 TextView 内部，定位它落在哪一段
-                val anchor = textView?.let { tv ->
-                    val local = pressWindow - viewOrigin
-                    tv.getOffsetForPosition(local.x, local.y)
-                } ?: (message.text.length / 2)
+                // 只记消息和长按点：真正的选区由系统在选择模式里自己决定
                 onSelectionChange(
                     MessageSelection(
                         messageId = message.id,
                         text = message.text,
-                        range = expandParagraph(message.text, anchor),
+                        pressWindow = pressWindow,
                     ),
                 )
             },
@@ -298,11 +301,12 @@ private fun UserMessage(
                         MessageBodyText(
                             text = message.text,
                             markdown = false,
-                            selectable = selection != null,
-                            initialRange = selection?.range,
+                            selecting = selection != null,
+                            pressWindow = selection?.pressWindow,
                             color = colors.textPrimary,
                             onViewReady = { textView = it },
                             onViewOrigin = { viewOrigin = it },
+                            onSelectionFinished = { onSelectionChange(null) },
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                         )
                     }
@@ -313,57 +317,39 @@ private fun UserMessage(
 }
 
 /**
- * 消息正文的唯一渲染通道：普通态与选择态共用同一个 TextView、同一份 Spannable。
- * 进入选择模式排版零变化。
- * 选择 UI 全部为 APP 内置（不走系统 ActionMode，避免 ROM 注入「问小爱/翻译」等杂项）：
- * 高亮用自绘 Span（整行满宽色块），水滴手柄与「复制/全选/分享」菜单用 Compose 覆盖层。
+ * 消息正文的唯一渲染通道。
+ *
+ * 默认是普通 TextView，不参与文本选择；只有长按菜单点了「选择文本」之后，才把这一条切到
+ * **系统原生选择模式**：选区手柄、放大镜、ActionMode 工具栏全部交给 Android，
+ * App 不再自绘手柄、高亮和「复制/全选/分享」浮层。
+ *
+ * 进入方式：开启 textIsSelectable + requestFocus 后，在长按点合成一次长按
+ * （DOWN 保持 600ms 再 UP）——系统只在用户手势长按时拉起 ActionMode，
+ * 单纯 setSelection 往往只出手柄、不出工具栏。
  */
 @Composable
 private fun MessageBodyText(
     text: String,
     markdown: Boolean,
-    selectable: Boolean,
-    initialRange: TextRange?,
+    selecting: Boolean,
+    pressWindow: Offset?,
     color: Color,
     onViewReady: (TextView) -> Unit = {},
     onViewOrigin: (Offset) -> Unit = {},
+    onSelectionFinished: () -> Unit = {},
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
     val colors = DsTheme.colors
     val density = LocalDensity.current
-    val context = LocalContext.current
     val textColor = color.toArgb()
-    // 官方真机取色：深色主题选区底 #33426B（钢蓝）、手柄 #6599FE；浅色用品牌蓝系
-    val isDark = colors === DsDarkColors
-    val highlightArgb = (if (isDark) Color(0xFF33426B) else Color(0x664C6EF6)).toArgb()
-    val handleColor = if (isDark) Color(0xFF6599FE) else Color(0xFF4C6EF6)
     val metrics = remember(colors, density, compact) { SpanMetrics(density, colors, compact) }
     val content = remember(text, markdown, metrics) {
         buildBodySpannable(text, markdown, metrics)
     }
     var tv by remember { mutableStateOf<TextView?>(null) }
-    // 选区高亮 Span：range 由拖动手柄实时更新，span 只改字段并重挂
-    val highlightSpan = remember(highlightArgb) {
-        SelectionBgSpan(layoutProvider = { tv?.layout }, color = highlightArgb)
-    }
-    // 进过一次选择态后记住，退出时才好清理（同一个视图，不重建、不换排版）
-    var selectionActive by remember { mutableStateOf(false) }
-    var liveRange by remember { mutableStateOf(TextRange.Zero) }
-    var menuVisible by remember { mutableStateOf(false) }
-
-    // 选区变化（拖手柄/全选/长按选词）→ 重挂高亮 Span
-    LaunchedEffect(liveRange, content, tv) {
-        val spannable = tv?.text as? Spannable
-        if (spannable != null) {
-            spannable.getSpans(0, spannable.length, SelectionBgSpan::class.java).forEach { spannable.removeSpan(it) }
-            if (liveRange.length > 0) {
-                highlightSpan.start = liveRange.start.coerceIn(0, spannable.length)
-                highlightSpan.end = liveRange.end.coerceIn(0, spannable.length)
-                spannable.setSpan(highlightSpan, highlightSpan.start, highlightSpan.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-        }
-    }
+    var armed by remember { mutableStateOf(false) }
+    val finished by rememberUpdatedState(onSelectionFinished)
 
     Box(modifier = modifier) {
         AndroidView<TextView>(
@@ -375,6 +361,15 @@ private fun MessageBodyText(
                     setTextSize(TypedValue.COMPLEX_UNIT_PX, metrics.textPx)
                     showSoftInputOnFocus = false
                     setText(content, TextView.BufferType.SPANNABLE)
+                    // 只用于感知系统选择结束：默认菜单项一个不动
+                    setCustomSelectionActionModeCallback(object : ActionMode.Callback {
+                        override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean = true
+                        override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean = false
+                        override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean = false
+                        override fun onDestroyActionMode(mode: ActionMode?) {
+                            finished()
+                        }
+                    })
                 }
             },
             update = { view ->
@@ -383,297 +378,43 @@ private fun MessageBodyText(
                 if (view.text !== content) {
                     view.setText(content, TextView.BufferType.SPANNABLE)
                 }
-                if (selectable && !selectionActive) {
-                    // 进入选择模式：同一视图、同一排版，只是叠上高亮/手柄/菜单
-                    selectionActive = true
-                    liveRange = TextRange(
-                        initialRange?.start?.coerceIn(0, content.length) ?: 0,
-                        initialRange?.end?.coerceIn(0, content.length) ?: content.length,
-                    )
-                    menuVisible = true
-                } else if (!selectable && selectionActive) {
-                    selectionActive = false
-                    menuVisible = false
-                    liveRange = TextRange.Zero
+                if (selecting && !armed) {
+                    armed = true
+                    val local = pressWindow?.let { p ->
+                        // 窗口坐标 → TextView 内部坐标（Compose 的窗口坐标与 Activity window 同一套）
+                        val loc = IntArray(2)
+                        view.getLocationInWindow(loc)
+                        Offset(p.x - loc[0], p.y - loc[1])
+                    } ?: Offset(view.width / 2f, view.height / 2f)
+                    view.setTextIsSelectable(true)
+                    view.requestFocus()
+                    view.post { synthesizeLongPress(view, local) }
+                } else if (!selecting && armed) {
+                    armed = false
+                    view.clearFocus()
+                    view.setTextIsSelectable(false)
                 }
             },
             modifier = (if (markdown) Modifier.fillMaxWidth() else Modifier)
                 .onGloballyPositioned { onViewOrigin(it.positionInWindow()) },
         )
-
-        if (selectable) {
-            // 手势层：盖在文字上方。长按选词并弹菜单，单击收起菜单；
-            // detectTapGestures 不消费移动事件，LazyColumn 滚动不受影响
-            Box(
-                Modifier
-                    .matchParentSize()
-                    .pointerInput(selectable) {
-                        detectTapGestures(
-                            onTap = { menuVisible = false },
-                            onLongPress = { o ->
-                                (tv)?.let { view ->
-                                    val offset = view.getOffsetForPosition(o.x, o.y)
-                                    val bounds = wordBoundsAt(view, offset)
-                                    if (bounds.second > bounds.first) {
-                                        liveRange = TextRange(bounds.first, bounds.second)
-                                        menuVisible = true
-                                    }
-                                }
-                            },
-                        )
-                    },
-            )
-        }
-
-        if (selectionActive && liveRange.length > 0) {
-            SelectionChrome(
-                tv = tv,
-                range = liveRange,
-                onRangeChange = { liveRange = it },
-                menuVisible = menuVisible,
-                onMenuVisibleChange = { menuVisible = it },
-                handleColor = handleColor,
-                onCopy = {
-                    val selected = tv?.text?.substring(
-                        liveRange.start.coerceIn(0, liveRange.end),
-                        liveRange.end.coerceIn(0, liveRange.end),
-                    ).orEmpty()
-                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    cm.setPrimaryClip(ClipData.newPlainText("selection", selected))
-                    menuVisible = false
-                },
-                onSelectAll = {
-                    liveRange = TextRange(0, tv?.text?.length ?: content.length)
-                },
-                onShare = {
-                    val selected = tv?.text?.substring(
-                        liveRange.start.coerceIn(0, liveRange.end),
-                        liveRange.end.coerceIn(0, liveRange.end),
-                    ).orEmpty()
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, selected)
-                    }
-                    context.startActivity(Intent.createChooser(intent, "分享"))
-                    selectionActive = false
-                    menuVisible = false
-                    liveRange = TextRange.Zero
-                },
-            )
-        }
     }
-}
-
-/** 长按选词：用 BreakIterator 按词边界扩出长按处的词；中文退化到单字 */
-private fun wordBoundsAt(tv: TextView, offset: Int): Pair<Int, Int> {
-    val text = tv.text?.toString() ?: return 0 to 0
-    if (text.isEmpty()) return 0 to 0
-    val pos = offset.coerceIn(0, text.length - 1)
-    val it = BreakIterator.getWordInstance()
-    it.setText(text)
-    var start = it.preceding(pos + 1)
-    var end = it.following(pos)
-    if (start == BreakIterator.DONE) start = 0
-    if (end == BreakIterator.DONE) end = text.length
-    if (text[start].isWhitespace()) start++
-    if (end > start && text[end - 1].isWhitespace()) end--
-    // CJK 连续串按单字选，避免整段被当成一个"词"
-    if (end - start > 1 && text.substring(start, end).all { it.code in 0x4E00..0x9FFF || it.code in 0x3400..0x4DBF }) {
-        return pos to pos + 1
-    }
-    return start.coerceAtLeast(0) to end.coerceAtMost(text.length)
 }
 
 /**
- * APP 内置选择的三件套：高亮已由 Span 绘制，这里画两个可拖的水滴手柄
- * 和锚定在选区上方的「复制/全选/分享」浮层菜单。
+ * 在指定坐标合成一次长按：DOWN → 600ms → UP。
+ * TextView 的长按识别器会在 500ms 左右把系统选择拉起来（手柄 + ActionMode）。
  */
-@Composable
-private fun SelectionChrome(
-    tv: TextView?,
-    range: TextRange,
-    onRangeChange: (TextRange) -> Unit,
-    menuVisible: Boolean,
-    onMenuVisibleChange: (Boolean) -> Unit,
-    handleColor: Color,
-    onCopy: () -> Unit,
-    onSelectAll: () -> Unit,
-    onShare: () -> Unit,
-) {
-    val colors = DsTheme.colors
-    val density = LocalDensity.current
-    var boxSize by remember { mutableStateOf(IntSize.Zero) }
-    var menuSize by remember { mutableStateOf(IntSize.Zero) }
-
-    fun anchorOf(range: TextRange): Pair<Offset, Offset>? {
-        val layout = tv?.layout ?: return null
-        val length = layout.text.length
-        if (length == 0 || range.length <= 0) return null
-        val start = range.start.coerceIn(0, length - 1)
-        val end = range.end.coerceIn(0, length)
-        val firstLine = layout.getLineForOffset(start)
-        val lastLine = layout.getLineForOffset((end - 1).coerceAtLeast(0))
-        val startX = layout.getPrimaryHorizontal(start)
-        val endX = layout.getPrimaryHorizontal(end)
-        val startY = layout.getLineBottom(firstLine).toFloat()
-        val endY = layout.getLineBottom(lastLine).toFloat()
-        return Offset(startX, startY) to Offset(endX, endY)
-    }
-
-    val anchors = anchorOf(range)
-    if (anchors == null) return
-    val (startAnchor, endAnchor) = anchors
-
-    fun offsetAt(pos: Offset): Int {
-        val view = tv ?: return -1
-        return view.getOffsetForPosition(pos.x, pos.y)
-    }
-
-    // 左手柄：尖端在选区起点的行底
-    HandleBox(
-        tip = startAnchor,
-        color = handleColor,
-        mirrored = false,
-        onDragStart = { onMenuVisibleChange(false) },
-        onDrag = { pos ->
-            val offset = offsetAt(pos)
-            if (offset >= 0) {
-                val newStart = offset.coerceIn(0, range.end - 1)
-                onRangeChange(TextRange(newStart, range.end))
-            }
-        },
-        onDragEnd = { onMenuVisibleChange(true) },
-    )
-    // 右手柄：尖端在选区终点的行底
-    HandleBox(
-        tip = endAnchor,
-        color = handleColor,
-        mirrored = true,
-        onDragStart = { onMenuVisibleChange(false) },
-        onDrag = { pos ->
-            val offset = offsetAt(pos)
-            if (offset >= 0) {
-                val newEnd = offset.coerceIn(range.start + 1, tv?.text?.length ?: range.end)
-                onRangeChange(TextRange(range.start, newEnd))
-            }
-        },
-        onDragEnd = { onMenuVisibleChange(true) },
-    )
-
-    if (menuVisible) {
-        val menuWidthPx = if (menuSize.width > 0) menuSize.width else with(density) { 238.dp.toPx() }.toInt()
-        val menuHeightPx = if (menuSize.height > 0) menuSize.height else with(density) { 68.dp.toPx() }.toInt()
-        val marginPx = with(density) { 10.dp.toPx() }.toInt()
-        val midX = (startAnchor.x + endAnchor.x) / 2f
-        val menuX = (midX - menuWidthPx / 2f).toInt().coerceIn(0, (boxSize.width - menuWidthPx).coerceAtLeast(0))
-        val menuY = if (startAnchor.y - menuHeightPx - marginPx >= 0) {
-            (startAnchor.y - menuHeightPx - marginPx).toInt()
-        } else {
-            (endAnchor.y + marginPx).toInt()
-        }
-        Popup(
-            alignment = Alignment.TopStart,
-            offset = IntOffset(menuX, menuY),
-            properties = PopupProperties(focusable = false, dismissOnClickOutside = false),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = colors.dialog,
-                shadowElevation = 12.dp,
-                modifier = Modifier.onSizeChanged { menuSize = it },
-            ) {
-                Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    SelectionMenuItem("复制", { SvgIcon(R.drawable.ic_copy_outline, tint = colors.textPrimary, size = 18.dp) }, onCopy)
-                    SelectionMenuItem("全选", {
-                        SvgIcon(
-                            R.drawable.ic_select_all_outline_20,
-                            tint = colors.textPrimary,
-                            size = 19.dp,
-                        )
-                    }, onSelectAll)
-                    SelectionMenuItem("分享", { SvgIcon(R.drawable.ic_share_outline_20, tint = colors.textPrimary, size = 18.dp) }, onShare)
-                }
-            }
-        }
-    }
-
-    Box(Modifier.onSizeChanged { boxSize = it })
-}
-
-/** 单个水滴手柄：圆形 + 下垂尖角，尖端对齐选区端点；拖动把位置换算成字符偏移 */
-@Composable
-private fun HandleBox(
-    tip: Offset,
-    color: Color,
-    mirrored: Boolean,
-    onDragStart: () -> Unit,
-    onDrag: (Offset) -> Unit,
-    onDragEnd: () -> Unit,
-) {
-    val density = LocalDensity.current
-    val sizePx = with(density) { 44.dp.toPx() }
-    val grabRef = remember { mutableStateOf(Offset.Zero) }
-    var lastPos by remember { mutableStateOf(Offset.Zero) }
-    val topLeft = Offset(tip.x - sizePx / 2f, tip.y - with(density) { 42.dp.toPx() })
-    Box(
-        Modifier
-            .offset { IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()) }
-            .size(44.dp)
-            .drawBehind {
-                val r = 10.5.dp.toPx()
-                val cx = 22.dp.toPx()
-                val cy = 16.dp.toPx()
-                val tipX = 22.dp.toPx()
-                val tipY = 42.dp.toPx()
-                drawCircle(color, r, Offset(cx, cy))
-                val path = ComposePath().apply {
-                    moveTo(cx - r * 0.68f, cy + r * 0.68f)
-                    quadraticBezierTo(cx - r * 0.5f, tipY - r, tipX, tipY)
-                    quadraticBezierTo(cx + r * 0.5f, tipY - r, cx + r * 0.68f, cy + r * 0.68f)
-                    close()
-                }
-                drawPath(path, color)
-            }
-            .pointerInput(mirrored) {
-                detectDragGestures(
-                    onDragStart = { o ->
-                        grabRef.value = topLeft + o
-                        lastPos = o
-                        onDragStart()
-                    },
-                    onDrag = { change, _ ->
-                        val delta = change.position - lastPos
-                        lastPos = change.position
-                        change.consume()
-                        grabRef.value += delta
-                        onDrag(grabRef.value)
-                    },
-                    onDragEnd = onDragEnd,
-                    onDragCancel = onDragEnd,
-                )
-            },
-    )
-}
-
-/** 浮层菜单的单项：图标在上、文字在下 */
-@Composable
-private fun SelectionMenuItem(label: String, icon: @Composable () -> Unit, onClick: () -> Unit) {
-    val colors = DsTheme.colors
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        icon()
-        Spacer(Modifier.height(5.dp))
-        Text(
-            text = label,
-            style = DsText.caption.copy(fontSize = 12.sp),
-            color = colors.textPrimary,
-        )
-    }
+private fun synthesizeLongPress(view: TextView, local: Offset) {
+    val now = SystemClock.uptimeMillis()
+    val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, local.x, local.y, 0)
+    view.dispatchTouchEvent(down)
+    down.recycle()
+    view.postDelayed({
+        val up = MotionEvent.obtain(now, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, local.x, local.y, 0)
+        view.dispatchTouchEvent(up)
+        up.recycle()
+    }, 600)
 }
 
 /**
@@ -892,49 +633,6 @@ private class RuleSpan(private val color: Int) : LineBackgroundSpan {
     }
 }
 
-/**
- * APP 内置选中的高亮：选中范围涉及的每一行都画满宽色块，
- * 首行从选区起点的字形位置开始、末行画到选区终点 —— 与系统选择观感一致。
- * start/end 由拖动手柄实时改写，span 自身随字符区间挂载/重挂。
- */
-private class SelectionBgSpan(
-    private val layoutProvider: () -> Layout?,
-    private val color: Int,
-) : LineBackgroundSpan {
-    var start: Int = 0
-    var end: Int = 0
-
-    override fun drawBackground(
-        canvas: Canvas,
-        paint: Paint,
-        left: Int,
-        right: Int,
-        top: Int,
-        baseline: Int,
-        bottom: Int,
-        text: CharSequence,
-        start: Int,
-        end: Int,
-        lineStart: Int,
-    ) {
-        if (end <= start) return
-        val layout = layoutProvider() ?: return
-        val length = layout.text.length
-        if (length == 0) return
-        val firstLine = layout.getLineForOffset(start.coerceIn(0, length - 1))
-        val lastLine = layout.getLineForOffset(end.coerceIn(start, length).let { if (it > 0) it - 1 else 0 })
-        var idx = firstLine
-        while (idx <= lastLine && layout.getLineTop(idx) != top) idx++
-        if (idx > lastLine) return
-        val x0 = if (idx == firstLine) layout.getPrimaryHorizontal(start.coerceIn(0, length)) else left.toFloat()
-        val x1 = if (idx == lastLine) layout.getPrimaryHorizontal(end.coerceIn(0, length)) else right.toFloat()
-        if (x1 <= x0) return
-        val oldColor = paint.color
-        paint.color = color
-        canvas.drawRect(x0, top.toFloat(), x1, bottom.toFloat(), paint)
-        paint.color = oldColor
-    }
-}
 
 /** 普通文本直接铺一层固定行高；Markdown 走块级构建 */
 private fun buildBodySpannable(text: String, markdown: Boolean, m: SpanMetrics): SpannableStringBuilder {
@@ -1108,18 +806,6 @@ private fun appendDivider(sb: SpannableStringBuilder, m: SpanMetrics) {
     sb.setSpan(RuleSpan(m.outline), s, s + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 }
 
-/** 由字符位置向前后扩到换行边界，得到"长按处所在的那一段" */
-private fun expandParagraph(text: String, anchor: Int): TextRange {
-    if (text.isEmpty()) return TextRange(0)
-    val a = anchor.coerceIn(0, text.length)
-    var start = a
-    while (start > 0 && text[start - 1] != '\n') start--
-    var end = a
-    while (end < text.length && text[end] != '\n') end++
-    while (start < end && text[start].isWhitespace()) start++
-    while (end > start && text[end - 1].isWhitespace()) end--
-    return if (start < end) TextRange(start, end) else TextRange(0, text.length)
-}
 
 /** 长按点落在哪个文字块：返回该块在 Spannable 里的区间（落在块间空白时取下一块） */
 private fun blockRangeAt(markdown: String, offset: Int, m: SpanMetrics): TextRange {
@@ -1193,15 +879,8 @@ private fun AssistantMessage(
             onExpandedChange = { menuExpanded.value = it },
             onRegenerate = onRegenerate,
             onSelectText = {
-                // 就地选择：长按点落在哪一段（按段落/行边界扩），进选择态后直接预选这一段，
-                // 再用手柄往两边扩。不再弹独立的「选择文字」面板。
-                val range = textView?.let { tv ->
-                    val local = pressWindow - viewOrigin
-                    val offset = tv.getOffsetForPosition(local.x, local.y)
-                    expandParagraph(message.text, offset)
-                }?.takeIf { it.end > it.start }
-                    ?: TextRange(0, message.text.length)
-                onSelectionChange(MessageSelection(message.id, message.text, range))
+                // 交给系统：只记长按点，进入选择模式后由 Android 决定初始选区和工具栏
+                onSelectionChange(MessageSelection(message.id, message.text, pressWindow))
             },
         )
         if (message.reasoning.isNotBlank() || message.status == MessageStatus.Reasoning) {
@@ -1223,11 +902,12 @@ private fun AssistantMessage(
                     MessageBodyText(
                         text = message.text,
                         markdown = true,
-                        selectable = selection != null,
-                        initialRange = selection?.range,
+                        selecting = selection != null,
+                        pressWindow = selection?.pressWindow,
                         color = colors.textPrimary,
                         onViewReady = { textView = it },
                         onViewOrigin = { viewOrigin = it },
+                        onSelectionFinished = { onSelectionChange(null) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -1354,8 +1034,8 @@ private fun ReasoningSection(message: MessageUi, onToggle: () -> Unit) {
                 MessageBodyText(
                     text = message.reasoning,
                     markdown = true,
-                    selectable = false,
-                    initialRange = null,
+                    selecting = false,
+                    pressWindow = null,
                     color = colors.textSecondary,
                     compact = true,
                     modifier = Modifier
