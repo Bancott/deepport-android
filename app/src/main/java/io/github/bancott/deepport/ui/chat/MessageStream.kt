@@ -1,4 +1,4 @@
-﻿package io.github.bancott.deepport.ui.chat
+package io.github.bancott.deepport.ui.chat
 
 import io.github.bancott.deepport.R
 
@@ -181,7 +181,12 @@ fun MessageStream(
         snapshotFlow {
             val info = listState.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()
-            last == null || last.index >= info.totalItemsCount - 1
+            // 必须同时满足「最后一条在视口里」和「它的底边已经贴近视口底」才算跟到底部。
+            // 只看 index 的话，回答变高（WebView）后最后一条永远可见，用户根本滑不上去，
+            // 一有新 token 就被拽回底部。
+            last != null &&
+                last.index >= info.totalItemsCount - 1 &&
+                (last.offset + last.size - info.viewportEndOffset) <= 160
         }.collect { follow = it }
     }
     LaunchedEffect(messages.size, messages.lastOrNull()?.text?.length, messages.lastOrNull()?.reasoning?.length) {

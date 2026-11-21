@@ -86,6 +86,16 @@ fun WebMessageView(
                 }
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
+                isNestedScrollingEnabled = false
+                overScrollMode = android.view.View.OVER_SCROLL_NEVER
+                // WebView 高度等于内容高度，本身没有可滚动空间；把纵向手势让给外层列表，
+                // 否则拖动会被 WebView 吃掉，表现为「滑不上去」。长按选文字仍由 WebView 处理。
+                setOnTouchListener { v, e ->
+                    if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                        v.parent?.requestDisallowInterceptTouchEvent(false)
+                    }
+                    false
+                }
                 addJavascriptInterface(
                     object {
                         @JavascriptInterface

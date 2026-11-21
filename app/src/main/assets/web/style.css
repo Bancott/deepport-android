@@ -10,7 +10,7 @@
   overflow-wrap: anywhere;
   -webkit-text-size-adjust: 100%;
 }
-#root { padding: 0; }
+#root { padding: 0 0 1px; display: flow-root; }
 
 .ds-markdown p { margin: 0 0 16px; }
 .ds-markdown p:last-child { margin-bottom: 0; }

@@ -3,7 +3,15 @@
   function reportHeight() {
     var root = document.getElementById('root')
     if (!root) return
-    var h = Math.ceil(root.getBoundingClientRect().height)
+    // 取三种测量的最大值再补 2px：只用量 rect 时，最后一个代码块的 padding/圆角
+    // 会被算漏，WebView 高度偏小，底部圆角就被裁成直角、字母也会被切掉。
+    var h = Math.ceil(
+      Math.max(
+        root.getBoundingClientRect().height,
+        root.scrollHeight,
+        document.body.scrollHeight
+      ) + 2
+    )
     if (window.AndroidHost && window.AndroidHost.onHeight) window.AndroidHost.onHeight(h)
   }
 
