@@ -56,6 +56,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.bancott.deepport.ui.chat.web.WebChatList
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import io.github.bancott.deepport.R
@@ -250,30 +251,10 @@ fun ChatScreen(
                 if (state.isEmpty) {
                     EmptyState(greeting = state.greeting)
                 } else {
-                    MessageStream(
+                    // 批次 A：整个消息区换成一个 WebView，网页自己滚动（不再有多个 WebView 抢手势）
+                    WebChatList(
                         messages = state.messages,
                         sessionTokens = state.sessionTokens,
-                        selection = messageSelection,
-                        onSelectionChange = { sel ->
-                            messageSelection = sel
-                            if (sel != null) selectionStartedAt = System.currentTimeMillis()
-                        },
-                        onSelectionBounds = { selectionBounds = it },
-                        onSpeakSelection = onSpeakSelection,
-                        readingMessageId = state.readingMessageId,
-                        readingState = state.readingState,
-                        onToggleReasoning = onToggleReasoning,
-                        onCopy = onCopyMessage,
-                        onSpeak = onSpeakMessage,
-                        onShare = onShareMessage,
-                        onRegenerate = onRegenerate,
-                        onRetry = onRetryMessage,
-                        onEdit = onEditMessage,
-                        onSourcesClick = { message -> sourcesSheet = message.sources },
-                        onBranchPrev = onBranchPrev,
-                        onBranchNext = onBranchNext,
-                        editingId = state.editing?.id,
-                        onCancelEdit = onCancelEdit,
                     )
                     BottomFadeMask(
                         modifier = Modifier.align(Alignment.BottomCenter),

@@ -1,0 +1,130 @@
+html, body.list-page {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+#list {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 6px 0 12px;
+}
+#list::-webkit-scrollbar { display: none; }
+
+.msg { padding: 0 24px; }
+.msg + .msg { margin-top: 2px; }
+
+/* 用户气泡 */
+.msg.user { display: flex; justify-content: flex-end; padding: 12px 16px 0 72px; }
+.msg.user .bubble {
+  max-width: 100%;
+  background: var(--bubble);
+  border-radius: 20px;
+  padding: 10px 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 17px;
+  line-height: 26px;
+  color: var(--fg);
+}
+
+/* AI 回答 */
+.msg.assistant { padding-top: 16px; }
+.msg.assistant .reasoning { margin-bottom: 8px; }
+.reasoning-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  color: var(--fg2);
+  font-size: 17px;
+  line-height: 26px;
+  cursor: pointer;
+}
+.reasoning-head .arrow {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  transition: transform .15s ease;
+}
+.reasoning-head.open .arrow { transform: rotate(90deg); }
+.reasoning-body {
+  display: none;
+  margin-top: 6px;
+  padding-left: 17px;
+  border-left: 1px solid rgba(255,255,255,.12);
+  color: var(--fg2);
+  font-size: 15px;
+  line-height: 24px;
+}
+.reasoning-body.show { display: block; }
+
+.msg.assistant .body { color: var(--fg); }
+.msg.assistant.streaming .body::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 17px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--fg2);
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.msg .sources {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--fg2);
+  font-size: 13px;
+}
+
+.msg .actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+  color: var(--fg2);
+  min-height: 30px;
+}
+.msg .actions .icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+.msg .actions .icon svg { width: 20px; height: 20px; display: block; }
+.msg .actions .branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 15px;
+  color: var(--fg2);
+  margin-right: 8px;
+}
+.msg .actions .branch .chev { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
+.msg .actions .branch .chev.disabled { opacity: .35; }
+.msg .actions .tokens {
+  font-size: 13px;
+  color: var(--fg2);
+  margin-left: 4px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.msg .actions .spacer { flex: 1; }
+.msg .actions .retry { margin-left: auto; }
+
+.msg .hint { margin-top: 8px; font-size: 13px; color: var(--fg2); }

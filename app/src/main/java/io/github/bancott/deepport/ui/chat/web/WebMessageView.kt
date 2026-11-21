@@ -48,17 +48,18 @@ fun WebMessageView(
     val colors = DsTheme.colors
     val density = LocalDensity.current
     val context = LocalContext.current
-    var heightPx by remember { mutableIntStateOf(0) }
+    // JS 返回的是 CSS px（= dp），不是物理像素；直接按 dp 用，别再过 density 转换（否则高度会小三倍）
+    var heightDp by remember { mutableIntStateOf(0) }
     var lastRenderAt by remember { mutableLongStateOf(0L) }
     var lastRendered by remember { mutableStateOf<String?>(null) }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val bgArgb = colors.bg.toArgb()
 
     // 首次测量前的高度估计：按行数与每行字符数粗算，避免 0 高度闪一下
-    val estimatedPx = remember(markdown, density) {
-        val linePx = with(density) { 28.dp.toPx() }
+    val estimatedDp = remember(markdown, density) {
+        val lineDp = 28
         val lines = markdown.count { it == '\n' } + markdown.length / 22 + 1
-        (max(2, lines) * linePx).toInt()
+        max(2, lines) * lineDp
     }
 
     val themeJs = remember(colors) {
@@ -71,7 +72,7 @@ fun WebMessageView(
     }
 
     AndroidView(
-        modifier = modifier.height(with(density) { (if (heightPx > 0) heightPx else estimatedPx).toDp() }),
+        modifier = modifier.height((if (heightDp > 0) heightDp else estimatedDp).dp),
         factory = { ctx ->
             WebView(ctx).apply {
                 setBackgroundColor(bgArgb)
@@ -101,9 +102,10 @@ fun WebMessageView(
                         @JavascriptInterface
                         fun onHeight(h: Int) {
                             mainHandler.post {
-                                if (h > 0) heightPx = h
+                                if (h > 0) heightDp = h
                             }
                         }
+
 
                         @JavascriptInterface
                         fun copy(text: String) {
