@@ -58,7 +58,8 @@
     parts.push('<span class="icon" data-action="share">' + ICONS.share + '</span>')
     if (m.usage) {
       parts.push(
-        '<span class="tokens">▼ ' + fmt(m.usage.completion) + ' tok · 本会话 ' + fmt(sessionTokens) + '</span>'
+        '<span class="tokens">↑' + fmt(m.usage.prompt) + ' ↓' + fmt(m.usage.completion) +
+          ' · 本会话 ' + fmt(sessionTokens) + '</span>'
       )
     }
     parts.push('<span class="spacer"></span>')
@@ -133,6 +134,7 @@
       messages = payload.messages || []
       document.getElementById('list').dataset.sessionTokens = String(payload.sessionTokens || 0)
     } catch (e) {
+      console.error('setMessages parse failed: ' + e)
       messages = []
     }
     render()

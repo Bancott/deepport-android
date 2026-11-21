@@ -7,8 +7,9 @@ html, body.list-page {
 }
 
 #list {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -92,6 +93,8 @@ html, body.list-page {
 
 .msg .actions {
   display: flex;
+  flex-wrap: nowrap;
+  white-space: nowrap;
   align-items: center;
   gap: 2px;
   margin-top: 8px;
@@ -112,8 +115,11 @@ html, body.list-page {
   align-items: center;
   gap: 2px;
   font-size: 15px;
+  line-height: 20px;
   color: var(--fg2);
-  margin-right: 8px;
+  margin-right: 6px;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .msg .actions .branch .chev { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
 .msg .actions .branch .chev.disabled { opacity: .35; }

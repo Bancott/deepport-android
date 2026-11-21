@@ -1,4 +1,4 @@
-package io.github.bancott.deepport.ui.chat.web
+﻿package io.github.bancott.deepport.ui.chat.web
 
 import android.annotation.SuppressLint
 import android.os.Handler
@@ -133,8 +133,8 @@ fun WebChatList(
             }
         },
         update = { view ->
-            view.evaluateJavascript(themeJs, null)
             if (!ready) return@AndroidView
+            view.evaluateJavascript(themeJs, null)
             view.evaluateJavascript("window.setMessages(${JSONObject.quote(payload)})", null)
             view.evaluateJavascript("window.scrollToBottom()", null)
         },
