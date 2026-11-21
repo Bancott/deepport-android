@@ -29,9 +29,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
@@ -108,9 +105,6 @@ fun PushDrawerLayout(
                 .fillMaxSize()
                 .pointerInput(drawerOpen, pageTravelPx) {
                     var dragging = false
-                    var startX = 0f
-                    var totalX = 0f
-                    var totalY = 0f
 
                     fun settle(open: Boolean) {
                         val stateChanged = drawerOpen != open
@@ -130,42 +124,41 @@ fun PushDrawerLayout(
                         }
                     }
 
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        startX = down.position.x
-                        dragging = false
-                        totalX = 0f
-                        totalY = 0f
-                        var finished = false
-                        while (!finished) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (change.changedToUp()) {
-                                finished = true
-                                continue
-                            }
-                            val dx = change.position.x - change.previousPosition.x
-                            val dy = change.position.y - change.previousPosition.y
-                            totalX += dx
-                            totalY += dy
-                            if (!dragging &&
-                                kotlin.math.abs(totalX) > viewConfiguration.touchSlop &&
-                                kotlin.math.abs(totalX) > kotlin.math.abs(totalY)
-                            ) {
-                                dragging = true
-                                animJob?.cancel()
-                                velocityTracker.resetTracking()
-                            }
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            dragging = true
+                            animJob?.cancel()
+                            velocityTracker.resetTracking()
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
                             if (dragging) {
                                 change.consume()
                                 velocityTracker.addPosition(change.uptimeMillis, change.position)
-                                progress = (progress + dx / pageTravelPx).coerceIn(0f, 1f)
+                                // 1:1 线性跟手：手指位移直接换算成页面行程，无增益、无滞后（官方 AnchoredDraggable 语义）
+                                progress = (progress + dragAmount / pageTravelPx).coerceIn(0f, 1f)
                             }
-                        }
-                        if (dragging) settle(shouldOpen())
-                        dragging = false
-                    }
+                        },
+                        onDragEnd = {
+                            if (dragging) {
+                                dragging = false
+                                settle(shouldOpen())
+                            }
+                        },
+                        onDragCancel = {
+                            dragging = false
+                            settle(progress > 0.5f)
+                        },
+                    )
                 },
+        ) {
+            /* ---------- 1. 抽屉（最底层） ---------- */
+            Box(
+                modifier = Modifier
+                    .width(drawerWidth)
+                    .fillMaxHeight()
+                    // 用 graphicsLayer 平移：只走绘制阶段，抽屉里的 LazyColumn 不会每帧重新布局；
+                    // 也不取整，浮点位移才不会有整像素跳格（之前字体发颤的主因之一）
+                    .graphicsLayer { translationX = -drawerWidthPx + drawerWidthPx * progress },
             ) {
                 drawer(Modifier.fillMaxSize())
 
@@ -238,3 +231,4 @@ fun PushDrawerLayout(
             }
         }
     }
+}
