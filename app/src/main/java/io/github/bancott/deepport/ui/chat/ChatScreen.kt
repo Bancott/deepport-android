@@ -234,19 +234,7 @@ fun ChatScreen(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    // 点正文空白处：收起附件面板 + 收键盘。
-                    // 复制 / 分享 / 来源这些按钮自己会消费 tap，不会冒泡到这里，所以不受影响。
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = {
-                            focusManager.clearFocus()
-                            attachOpen = false
-                            // 菜单项那一下点击可能紧跟着穿透到这里，300ms 内不误清刚建立的选区
-                            if (System.currentTimeMillis() - selectionStartedAt > 300) {
-                                messageSelection = null
-                            }
-                        })
-                    },
+                    .fillMaxWidth(),
             ) {
                 if (state.isEmpty) {
                     EmptyState(greeting = state.greeting)

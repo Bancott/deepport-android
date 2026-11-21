@@ -67,6 +67,42 @@
     return '<div class="actions">' + parts.join('') + '</div>'
   }
 
+
+  function decorateCodeBlocks() {
+    var blocks = document.querySelectorAll('#list pre.md-code-block')
+    for (var i = 0; i < blocks.length; i++) {
+      var pre = blocks[i]
+      var prev = pre.previousElementSibling
+      if (prev && prev.classList && prev.classList.contains('md-code-bar')) continue
+      var code = pre.querySelector('code')
+      var lang = ''
+      if (code && code.className) {
+        var m = code.className.match(/language-([\w+#.-]+)/)
+        if (m) lang = m[1]
+      }
+      var bar = document.createElement('div')
+      bar.className = 'md-code-bar'
+      var label = document.createElement('span')
+      label.className = 'md-code-lang'
+      label.textContent = lang || 'text'
+      var btn = document.createElement('button')
+      btn.className = 'md-code-copy'
+      btn.type = 'button'
+      btn.textContent = '复制'
+      ;(function (preEl, button) {
+        button.addEventListener('click', function () {
+          var text = preEl.innerText.replace(/\n$/, '')
+          if (window.AndroidHost && window.AndroidHost.copy) window.AndroidHost.copy(text)
+          button.textContent = '已复制'
+          setTimeout(function () { button.textContent = '复制' }, 1200)
+        })
+      })(pre, btn)
+      bar.appendChild(label)
+      bar.appendChild(btn)
+      pre.parentNode.insertBefore(bar, pre)
+    }
+  }
+
   function renderMessage(m, sessionTokens) {
     var id = escapeHtml(m.id)
     if (m.role === 'user') {
@@ -106,6 +142,7 @@
     var html = ''
     for (var i = 0; i < messages.length; i++) html += renderMessage(messages[i], sessionTokens)
     list.innerHTML = html
+    decorateCodeBlocks()
     if (stickToBottom) list.scrollTop = list.scrollHeight
     if (window.AndroidHost && window.AndroidHost.onContentChanged) window.AndroidHost.onContentChanged()
   }
