@@ -1,13 +1,11 @@
 ﻿package io.github.bancott.deepport
 
 import android.os.Bundle
-import android.view.MotionEvent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
-import kotlin.math.abs
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -87,43 +85,6 @@ import java.util.Date
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
-
-    /** 右滑打开历史：WebView 会吃掉触摸，Compose 的抽屉手势收不到，只能在 Activity 层先截一道 */
-    var drawerSwipeEnabled = false
-    var drawerSwipeRequest by mutableStateOf(false)
-    private var swipeDownX = 0f
-    private var swipeDownY = 0f
-    private var swipeTracking = false
-
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (drawerSwipeEnabled) {
-            when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    swipeDownX = ev.x
-                    swipeDownY = ev.y
-                    swipeTracking = true
-                }
-                MotionEvent.ACTION_MOVE -> if (swipeTracking) {
-                    val dx = ev.x - swipeDownX
-                    val dy = ev.y - swipeDownY
-                    if (dx > 90f && dx > 2f * abs(dy)) {
-                        swipeTracking = false
-                        drawerSwipeRequest = true
-                        // 给子视图补一个 CANCEL，避免它把这次手势继续当成滚动
-                        val cancel = MotionEvent.obtain(ev)
-                        cancel.action = MotionEvent.ACTION_CANCEL
-                        super.dispatchTouchEvent(cancel)
-                        cancel.recycle()
-                        return true
-                    }
-                    if (abs(dy) > 48f) swipeTracking = false
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> swipeTracking = false
-            }
-        }
-        return super.dispatchTouchEvent(ev)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -218,15 +179,6 @@ private fun App(isDark: Boolean) {
     var showAppearance by remember { mutableStateOf(false) }
     var showLanguage by remember { mutableStateOf(false) }
     var webTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
-    // Activity 级右滑：只在会话页、抽屉关闭、没有叠加网页时启用
-    val activity = context as? MainActivity
-    activity?.drawerSwipeEnabled = screen == Screen.Chat && !drawerOpen && webTarget == null
-    LaunchedEffect(activity?.drawerSwipeRequest) {
-        if (activity?.drawerSwipeRequest == true) {
-            activity.drawerSwipeRequest = false
-            setDrawerOpen(true)
-        }
-    }
     var showCamera by remember { mutableStateOf(false) }
     var showVoiceTone by remember { mutableStateOf(false) }
 
