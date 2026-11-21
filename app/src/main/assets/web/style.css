@@ -66,11 +66,7 @@
   padding: 0;
   font-size: 14px;
   line-height: 22px;
-  /* 长行折行：WebView 里代码块的横向拖动容易被外层手势吃掉，
-     折行后既不裁字，也不需要横向滑动 */
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
+  white-space: pre;
 }
 
 .ds-markdown .markdown-table-wrapper {
