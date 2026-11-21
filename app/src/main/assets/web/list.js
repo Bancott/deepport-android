@@ -183,8 +183,74 @@
     stickToBottom = true
   }
 
+
+  // 右滑打开历史：
+  // - 代码块还能向左滚（scrollLeft > 0）时，让代码块自己横滑；
+  // - 代码块已经在最左端、或者根本不在代码块里，右滑就交给原生开抽屉。
+  function installSwipeToDrawer(list) {
+    var start = null
+    var decided = false
+    var fired = false
+
+    function codeBlockOf(node) {
+      while (node && node !== list) {
+        if (node.classList && node.classList.contains('md-code-block')) return node
+        node = node.parentElement
+      }
+      return null
+    }
+
+    list.addEventListener(
+      'touchstart',
+      function (e) {
+        if (e.touches.length !== 1) return
+        var t = e.touches[0]
+        start = { x: t.clientX, y: t.clientY }
+        decided = false
+        fired = false
+      },
+      { passive: true }
+    )
+
+    list.addEventListener(
+      'touchmove',
+      function (e) {
+        if (!start || fired || e.touches.length !== 1) return
+        var t = e.touches[0]
+        var dx = t.clientX - start.x
+        var dy = t.clientY - start.y
+        if (!decided) {
+          if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            decided = true
+          } else if (Math.abs(dy) > 12) {
+            start = null
+            return
+          } else {
+            return
+          }
+        }
+        if (decided && dx > 24) {
+          var code = codeBlockOf(e.target)
+          if (code && code.scrollLeft > 0) {
+            start = null
+            return
+          }
+          fired = true
+          if (window.AndroidHost && window.AndroidHost.openDrawer) {
+            window.AndroidHost.openDrawer()
+          }
+        }
+      },
+      { passive: true }
+    )
+
+    list.addEventListener('touchend', function () { start = null }, { passive: true })
+    list.addEventListener('touchcancel', function () { start = null }, { passive: true })
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     var list = document.getElementById('list')
+    installSwipeToDrawer(list)
     list.addEventListener('scroll', function () {
       stickToBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 24
     })

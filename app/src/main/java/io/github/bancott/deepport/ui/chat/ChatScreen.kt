@@ -107,6 +107,8 @@ fun ChatScreen(
     onSpeakMessage: (MessageUi) -> Unit = {},
     /// 选区朗读：系统选择工具栏里的「朗读」，走 App 内置 TTS
     onSpeakSelection: (String) -> Unit = {},
+    /** 网页里右滑（代码块已到最左端时）请求打开历史 */
+    onOpenDrawer: () -> Unit = {},
     onShareMessage: (MessageUi) -> Unit = {},
     onRegenerate: (MessageUi) -> Unit = {},
     onRetryMessage: (MessageUi) -> Unit = {},
@@ -243,6 +245,7 @@ fun ChatScreen(
                     WebChatList(
                         messages = state.messages,
                         sessionTokens = state.sessionTokens,
+                        onOpenDrawer = onOpenDrawer,
                     )
                     BottomFadeMask(
                         modifier = Modifier.align(Alignment.BottomCenter),

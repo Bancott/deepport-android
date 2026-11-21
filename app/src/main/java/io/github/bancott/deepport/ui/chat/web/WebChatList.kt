@@ -35,6 +35,7 @@ fun WebChatList(
     messages: List<MessageUi>,
     sessionTokens: Int,
     modifier: Modifier = Modifier,
+    onOpenDrawer: () -> Unit = {},
 ) {
     val colors = DsTheme.colors
     var ready by remember { mutableStateOf(false) }
@@ -127,6 +128,11 @@ fun WebChatList(
                         @JavascriptInterface
                         fun onContentChanged() {
                             // 批次 B：内容变化时在这里处理"回到底部"等
+                        }
+
+                        @JavascriptInterface
+                        fun openDrawer() {
+                            handler.post { onOpenDrawer() }
                         }
                     },
                     "AndroidHost",

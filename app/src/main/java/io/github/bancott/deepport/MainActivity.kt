@@ -579,6 +579,7 @@ private fun App(isDark: Boolean) {
                     Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
                 },
                 onSpeakSelection = { text -> vm.speakSelection(text) },
+                onOpenDrawer = { setDrawerOpen(true) },
                 onSpeakMessage = { message ->
                     if (!vm.speakMessage(message)) {
                         Toast.makeText(context, "这条回答还没有可朗读的正文", Toast.LENGTH_SHORT).show()
