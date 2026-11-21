@@ -107,7 +107,6 @@ fun PushDrawerLayout(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(drawerOpen, pageTravelPx) {
-                    val edgePx = 28.dp.toPx()
                     var dragging = false
                     var startX = 0f
                     var totalX = 0f
@@ -134,10 +133,6 @@ fun PushDrawerLayout(
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         startX = down.position.x
-                        // 关闭状态下只允许从左边缘 28dp 内起手，别抢消息区（WebView / 代码块横滑）的手势
-                        if (!drawerOpen && startX > edgePx) {
-                            return@awaitEachGesture
-                        }
                         dragging = false
                         totalX = 0f
                         totalY = 0f
