@@ -97,6 +97,26 @@ fun WebChatList(
                 }
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
+                isNestedScrollingEnabled = false
+                overScrollMode = android.view.View.OVER_SCROLL_NEVER
+                // 触摸按下后把事件锁在 WebView 里，避免 Compose 手势（抽屉/点击）延迟接管，
+                // 表现就是"慢速拖动几乎不动、快速滑动才有反应"。
+                setOnTouchListener { v, e ->
+                    if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    false
+                }
+                isNestedScrollingEnabled = false
+                overScrollMode = android.view.View.OVER_SCROLL_NEVER
+                // 触摸按下后把事件锁在 WebView 里，避免 Compose 手势（抽屉/点击）延迟接管，
+                // 表现就是"慢速拖动几乎不动、快速滑动才有反应"。
+                setOnTouchListener { v, e ->
+                    if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) {
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    false
+                }
                 addJavascriptInterface(
                     object {
                         @JavascriptInterface
