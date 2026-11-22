@@ -108,8 +108,10 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-        val latest = store.loadAll().firstOrNull()
-        if (latest != null) bind(latest) else currentId = store.newId()
+        // 冷启动一律进「新对话」：进程被系统回收后重新打开时，不再自动接回上一次的会话。
+        // 只退到后台、进程还活着时 ViewModel 不重建，当前会话保持不变；
+        // 历史会话仍在抽屉里，点一下就能回去。
+        currentId = store.newId()
     }
 
     /* ----------------------------- 会话生命周期 ----------------------------- */

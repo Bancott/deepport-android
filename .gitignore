@@ -19,3 +19,4 @@ hs_err_pid*.log
 keystore.properties
 *.jks
 *.keystore
+replay_pid*.log

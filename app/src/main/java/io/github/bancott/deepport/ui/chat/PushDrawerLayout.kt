@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -45,8 +46,8 @@ private const val FLING_VELOCITY = 700f
  *
  * - 拖拽 **1:1 线性跟手**（Material3 AnchoredDraggable 语义），页面与抽屉同步移动、无滞后；
  * - 抽屉从左侧滑入（-W → 0）；
- * - 会话页右移、缩小到 0.95、内容洗淡到 45%（深）/25%（浅）、20dp 圆角、左缘 1dp 高光；
- * - 抽屉面在滑出过程中压一层 (1−p)×0.2 黑纱，全开时褪尽（官方 ij7 case2 的 ContentScrim）；
+ * - 会话页右移、缩小到 0.95、内容洗淡到 45%（深）/25%（浅）、30dp 大圆角（有位移即出现）、左缘 1dp 高光；
+ * - 整屏压一层 (1−p)×0.2 黑纱（抽屉与卡片缩放露出的底同色，消除方形底），全开时褪尽（官方 ij7 case2 的 ContentScrim）；
  * - 松手吸附：spring(damping 0.9, stiffness 1500)（官方 mj7.a），**速度优先**（快速甩动按方向切换），
  *   否则看进度是否过半。
  */
@@ -54,6 +55,13 @@ private const val FLING_VELOCITY = 700f
 fun PushDrawerLayout(
     drawerOpen: Boolean,
     onDrawerOpenChange: (Boolean) -> Unit,
+    /** 外部（消息区手势）驱动的进度；为空时内部自管 */
+    externalProgress: MutableFloatState? = null,
+    /** 松手但开合状态没变时，外部用这个把进度收到锚点：每次自增触发一次 */
+    settleSignal: Int = 0,
+    settleTarget: Float = 0f,
+    /** 开始一次新手势：自增以取消正在跑的吸附动画，避免动画和手指同时写进度 */
+    cancelAnimationSignal: Int = 0,
     modifier: Modifier = Modifier,
     drawerWidthFraction: Float = 0.825f,
     drawer: @Composable (Modifier) -> Unit,
@@ -63,12 +71,15 @@ fun PushDrawerLayout(
     val isLight = colors.bg.luminance() > 0.5f
     // 直接以目标态起手：从设置页返回时，会话页那层仍记着 drawerOpen=true，
     // 若从 0 起播动画会先闪一帧纯会话界面再"拉回"抽屉，反而不符合预期。
-    var progress by remember { mutableFloatStateOf(if (drawerOpen) 1f else 0f) }
+    val progressState = externalProgress
+        ?: remember { mutableFloatStateOf(if (drawerOpen) 1f else 0f) }
+    var progress by progressState
     val scope = rememberCoroutineScope()
     val velocityTracker = remember { VelocityTracker() }
     var animJob by remember { mutableStateOf<Job?>(null) }
-    // 只在跨越阈值时重组一次，避免动画期间每帧重组整个会话页（卡顿根因）
-    val pageLifted = remember { derivedStateOf { progress > 0.01f } }
+    // 只在跨越阈值时重组一次，避免动画期间每帧重组整个会话页（卡顿根因）。
+    // 阈值取 0：手指一动（哪怕 1px）就裁圆角，不会先滑出一段方角再"蹦"出圆角。
+    val pageLifted = remember { derivedStateOf { progress > 0f } }
 
     fun animateProgressTo(target: Float) {
         animJob?.cancel()
@@ -78,13 +89,21 @@ fun PushDrawerLayout(
                 initialValue = progress,
                 targetValue = target,
                 animationSpec = spring(dampingRatio = 0.9f, stiffness = 1500f),
-            ) { value, _ -> progress = value }
+            ) { value, _ -> progress = value.coerceIn(0f, 1f) }
         }
     }
 
     // 外部状态变化（点菜单按钮）时补动画
     LaunchedEffect(drawerOpen) {
         animateProgressTo(if (drawerOpen) 1f else 0f)
+    }
+    // 外部手势收尾（开合状态没变时）
+    LaunchedEffect(settleSignal) {
+        if (settleSignal > 0) animateProgressTo(settleTarget)
+    }
+    // 外部开始拖动：让位给手指
+    LaunchedEffect(cancelAnimationSignal) {
+        if (cancelAnimationSignal > 0) animJob?.cancel()
     }
 
     BoxWithConstraints(
@@ -98,7 +117,8 @@ fun PushDrawerLayout(
         val drawerWidthPx = with(density) { drawerWidth.toPx() }
         // 每帧都要用的量提前算好，别把 dp→px 的密度查找带进绘制阶段
         val pageTravelPx = with(density) { (drawerWidth - 10.dp).toPx() }
-        val liftedShape = remember { RoundedCornerShape(20.dp) }
+        // 手机那种大 R 角：官方 20dp，这里放到 30dp；页面拖动时缩到 0.95，视觉半径约 28.5dp
+        val liftedShape = remember { RoundedCornerShape(30.dp) }
 
         Box(
             modifier = Modifier
@@ -161,19 +181,25 @@ fun PushDrawerLayout(
                     .graphicsLayer { translationX = -drawerWidthPx + drawerWidthPx * progress },
             ) {
                 drawer(Modifier.fillMaxSize())
-
-                // 抽屉面黑纱：滑出过程中压 (1−p)×0.2，全开时褪尽（官方 ContentScrim 的黑罩，
-                // 颜色固定、alpha 交给 graphicsLayer，避免每帧重组）
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = (1f - progress) * 0.2f }
-                        .background(Color.Black),
-                )
             }
 
+            /* ---------- 1.5 整屏黑纱（抽屉之上、卡片之下） ---------- */
+            // 必须盖满整屏，不能只挂在 82.5% 宽的抽屉里：卡片做了 scale 缩小 + 右移，
+            // 上/下/右三边会露出最外层那块 drawerSurface 方板；那块板若没被压暗，
+            // 就会比左侧抽屉亮一档（浅色实测 248 vs 232），直角边界清晰可见 ——
+            // 也就是「圆角卡片底下垫了个矩形」。黑纱挪到全屏后，卡片四周与左侧抽屉
+            // 同色、同进度，矩形感消失；卡片在不透明底之上，不受黑纱影响。
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    // 官方 ContentScrim：滑出过程中压 (1−p)×0.2，全开时褪尽。
+                    // 颜色固定、alpha 交给 graphicsLayer，避免每帧重组。
+                    .graphicsLayer { alpha = (1f - progress) * 0.2f }
+                    .background(Color.Black),
+            )
+
             /* ---------- 2. 会话页（上层卡片） ---------- */
-            // 不做投影：卡片外侧露出的就是历史界面本身，保证全屏只有两种颜色。
+            // 不做投影：卡片外侧露出的是被整屏黑纱压暗后的抽屉底色，与左侧抽屉同色，全屏只有两种颜色。
             Box(
                 modifier = Modifier
                     .fillMaxSize()

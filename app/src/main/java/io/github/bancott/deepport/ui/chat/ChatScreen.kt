@@ -10,62 +10,52 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.foundation.background
+import kotlinx.coroutines.delay
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.VolumeOff
-import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import io.github.bancott.deepport.ui.chat.web.WebChatList
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.bancott.deepport.R
+import io.github.bancott.deepport.ui.chat.web.WebChatList
 import io.github.bancott.deepport.ui.common.CircleIconButton
 import io.github.bancott.deepport.ui.common.DeepSeekTopBar
 import io.github.bancott.deepport.ui.common.NewChatGlyph
 import io.github.bancott.deepport.ui.common.SpeakerGlyph
+import io.github.bancott.deepport.ui.common.SpeakerWaveGlyph
 import io.github.bancott.deepport.ui.theme.DeepSeekTheme
-import io.github.bancott.deepport.ui.theme.DsDimen
 import io.github.bancott.deepport.ui.theme.DsText
 import io.github.bancott.deepport.ui.theme.DsTheme
 
@@ -108,7 +98,16 @@ fun ChatScreen(
     /// 选区朗读：系统选择工具栏里的「朗读」，走 App 内置 TTS
     onSpeakSelection: (String) -> Unit = {},
     /** 网页里右滑（代码块已到最左端时）请求打开历史 */
-    onOpenDrawer: () -> Unit = {},
+    /** 消息区手势与顶栏共用同一份进度 */
+    drawerProgress: androidx.compose.runtime.MutableFloatState? = null,
+    /** 抽屉行程（px）：手指位移换算成进度用 */
+    drawerTravelPx: Float = 1f,
+    /** 消息区松手结算（true=打开） */
+    onDrawerSettle: (Boolean) -> Unit = {},
+    /** 消息区开始拖动：取消正在跑的吸附动画 */
+    onDrawerDragStart: () -> Unit = {},
+    /** 自增一次 = 清掉网页里的选区（朗读读完） */
+    clearSelectionTick: Int = 0,
     onShareMessage: (MessageUi) -> Unit = {},
     onRegenerate: (MessageUi) -> Unit = {},
     onRetryMessage: (MessageUi) -> Unit = {},
@@ -129,12 +128,8 @@ fun ChatScreen(
     // 附件面板：点「+」展开，键盘弹起 / 发出消息后自动收起
     var attachOpen by remember { mutableStateOf(false) }
     var sourcesSheet by remember { mutableStateOf<List<SourceItem>?>(null) }
-    // 正在原地选中的那条消息；点空白处即取消
-    var messageSelection by remember { mutableStateOf<MessageSelection?>(null) }
-    var selectionStartedAt by remember { mutableLongStateOf(0L) }
-    // 被选中正文在窗口里的矩形：点在这个矩形外才退出选择（拖手柄不会误清）
-    var selectionBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    var rootOrigin by remember { mutableStateOf(Offset.Zero) }
+    // 用户消息长按菜单：消息 + 长按点在消息区里的位置（CSS px）
+    var userMenu by remember { mutableStateOf<Pair<MessageUi, Offset>?>(null) }
     // 只在键盘"弹起"时收面板。原来写的是 imeBottomPx > 0，键盘收起途中每帧都 > 0，
     // 会把刚点加号打开的面板立刻关掉（表现为"点加号没反应"）。
     var lastImePx by remember { mutableIntStateOf(0) }
@@ -178,27 +173,7 @@ fun ChatScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.bg)
-            .onGloballyPositioned { rootOrigin = it.positionInWindow() }
-            // 选择态下点「正文矩形」以外的地方就退出：用 Initial pass 观察，
-            // 不等子节点消费，所以气泡、空白、顶栏都能触发；拖手柄的落点在矩形内，不会误清。
-            .pointerInput(messageSelection, selectionBounds) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (event.type != PointerEventType.Release) continue
-                        val sel = messageSelection ?: continue
-                        val bounds = selectionBounds ?: continue
-                        if (System.currentTimeMillis() - selectionStartedAt <= 300) continue
-                        val point = event.changes.firstOrNull()?.position ?: continue
-                        val inWindow = Offset(rootOrigin.x + point.x, rootOrigin.y + point.y)
-                        if (!bounds.contains(inWindow)) {
-                            messageSelection = null
-                            selectionBounds = null
-                        }
-                    }
-                }
-            },
+            .background(colors.bg),
     ) {
         Column(
             modifier = Modifier
@@ -210,19 +185,24 @@ fun ChatScreen(
                 onMenuClick = onMenuClick,
                 menuDescription = menuDescription,
             ) {
-                // 顶栏朗读按钮：官方三态图标，不再手绘斜线/声波。
+                // 顶栏朗读按钮：朗读中显示喇叭 + 两道声波呼吸（与消息动作条同一套节奏），
+                // 空闲时仍是官方三态喇叭图标。
                 val reading = state.readingState != ReadAloudState.Idle
                 val speechOn = state.isSpeechOutputOn
                 CircleIconButton(
                     contentDescription = if (speechOn) "关闭自动朗读" else "开启自动朗读",
                     onClick = onToggleSpeechOutput,
                 ) {
-                    SpeakerGlyph(
-                        color = if (reading) colors.primary else colors.textPrimary,
-                        muted = !speechOn,
-                        reading = reading,
-                        iconSize = 24.dp,
-                    )
+                    if (reading) {
+                        SpeakerWaveGlyph(color = colors.primary, iconSize = 24.dp)
+                    } else {
+                        SpeakerGlyph(
+                            color = colors.textPrimary,
+                            muted = !speechOn,
+                            reading = false,
+                            iconSize = 24.dp,
+                        )
+                    }
                 }
                 Spacer(Modifier.width(8.dp))
                 CircleIconButton(
@@ -245,12 +225,52 @@ fun ChatScreen(
                     WebChatList(
                         messages = state.messages,
                         sessionTokens = state.sessionTokens,
-                        onOpenDrawer = onOpenDrawer,
+                        drawerProgress = drawerProgress,
+                        drawerTravelPx = drawerTravelPx,
+                        drawerOpen = drawerOpen,
+                        onSettle = onDrawerSettle,
+                        onDragStart = onDrawerDragStart,
+                        clearSelectionTick = clearSelectionTick,
+                        readingMessageId = state.readingMessageId,
+                        onSpeakSelection = onSpeakSelection,
+                        onMessageAction = { m, action ->
+                            when (action) {
+                                "copy" -> onCopyMessage(m)
+                                "speak" -> onSpeakMessage(m)
+                                "share" -> onShareMessage(m)
+                                "regenerate" -> onRegenerate(m)
+                                "retry" -> onRetryMessage(m)
+                                "branch-prev" -> onBranchPrev(m)
+                                "branch-next" -> onBranchNext(m)
+                                "reasoning" -> onToggleReasoning(m)
+                                // 回答下方的「N 个网页」：打开原生来源列表
+                                "sources" -> sourcesSheet = m.sources
+                            }
+                        },
+                        onUserMessageMenu = { m, x, y -> userMenu = m to Offset(x, y) },
                     )
-                    BottomFadeMask(
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                        height = if (imeBottomPx > 0) 0 else 28,
-                    )
+                    // 消息区底部不加渐隐：官方是输入栏自己带一条硬边背景，不是渐变
+                    // 用户消息长按菜单：锚在气泡上沿（网页给的 CSS px → dp）
+                    userMenu?.let { (msg, at) ->
+                        val anchorX = with(density) { at.x.toDp() }
+                        val anchorY = with(density) { at.y.toDp() }
+                        MessageMenuPopup(
+                            message = msg,
+                            expanded = true,
+                            onExpandedChange = { if (!it) userMenu = null },
+                            anchorX = anchorX,
+                            anchorY = if (anchorY > 48.dp) anchorY - 48.dp else 0.dp,
+                            onRegenerate = {
+                                userMenu = null
+                                onRegenerate(msg)
+                            },
+                            onEdit = {
+                                userMenu = null
+                                onEditMessage(msg)
+                            },
+                            showSelectText = false,
+                        )
+                    }
                 }
             }
 
@@ -359,23 +379,43 @@ fun ChatScreen(
 @Composable
 private fun EmptyState(greeting: String) {
     val colors = DsTheme.colors
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    // 官方首页的鲸鱼：点空白处游一次；这里再自动游一次，进新对话就能看到
+    var playKey by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        delay(350)
+        playKey++
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { playKey++ },
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_deepseek_whale),
-            contentDescription = "DeepSeek",
-            tint = colors.primary,
-            modifier = Modifier.size(44.dp),
+        HomeWhale(
+            color = colors.primary,
+            playKey = playKey,
+            modifier = Modifier.matchParentSize(),
         )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = greeting,
-            style = DsText.display,
-            color = colors.textPrimary,
-        )
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_deepseek_whale),
+                contentDescription = "DeepSeek",
+                tint = colors.primary,
+                modifier = Modifier.size(44.dp),
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = greeting,
+                style = DsText.display,
+                color = colors.textPrimary,
+            )
+        }
     }
 }
 

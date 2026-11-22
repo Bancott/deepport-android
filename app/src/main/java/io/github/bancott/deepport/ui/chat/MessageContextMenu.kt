@@ -112,6 +112,8 @@ fun MessageMenuPopup(
     onEdit: () -> Unit = {},
     /** 旧的原地选词回调：保留参数不动（lead 接完新面板后会删掉调用） */
     onSelectText: () -> Unit = {},
+    /** WebView 渲染模式下没有原地选词，隐藏这一项 */
+    showSelectText: Boolean = true,
 ) {
     val context = LocalContext.current
     val colors = DsTheme.colors
@@ -135,7 +137,7 @@ fun MessageMenuPopup(
             MenuAction("复制", { copyToClipboard(); onExpandedChange(false) },
                 iconRes = R.drawable.ic_copy_outline),
         )
-        add(
+        if (showSelectText) add(
             MenuAction("选择文本", {
                 // 就地进入选择态：长按点所在的词/段直接预选，手柄、菜单都叠在这一条消息上，
                 // 不再弹独立的「选择文字」面板。

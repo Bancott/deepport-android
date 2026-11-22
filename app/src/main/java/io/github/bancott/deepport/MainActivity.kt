@@ -35,12 +35,14 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -58,6 +60,8 @@ import io.github.bancott.deepport.ui.chat.ConversationDrawer
 import io.github.bancott.deepport.ui.chat.ConversationUi
 import io.github.bancott.deepport.ui.chat.DrawerUiState
 import io.github.bancott.deepport.ui.chat.PushDrawerLayout
+import io.github.bancott.deepport.ui.chat.web.ChatWeb
+import io.github.bancott.deepport.ui.chat.ReadAloudState
 import io.github.bancott.deepport.ui.chat.RenameConversationDialog
 import io.github.bancott.deepport.ui.chat.SearchScreen
 import io.github.bancott.deepport.ui.chat.rememberVoiceInput
@@ -88,6 +92,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // 注意：这里不做 WebView 预热。窗口就绪前创建的 WebView 在之后挂到 AndroidView 上时
+        // 会一直不绘制（Chromium 认为它仍不可见），表现就是冷启动后消息区一片空白。
+        // 复用池本身保留：第一次进入会话时创建，之后空态↔会话、切换对话都不再重建。
         setContent {
             val context = LocalContext.current
             val store = remember { SettingsStore.get(context) }
@@ -118,6 +125,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        // WebView 绑在当前 Activity 的 context 上，Activity 走了就必须销毁，不能跨实例复用
+        ChatWeb.destroy()
+        super.onDestroy()
     }
 }
 
@@ -173,6 +186,26 @@ private fun App(isDark: Boolean) {
     fun setDrawerOpen(open: Boolean) {
         navStack[navStack.lastIndex] = navStack.last().copy(drawerOpen = open)
     }
+    // 消息区（WebView）和顶栏（Compose 手势）共用同一份抽屉进度：
+    // 顶栏用 dragAmount，消息区用 MotionEvent.rawX，两者都是"没有被图层平移污染"的坐标，
+    // 所以 1:1 的换算完全一致，手感也就一致。
+    val drawerProgress = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val drawerDensity = LocalDensity.current
+    val drawerTravelPx = with(drawerDensity) {
+        LocalConfiguration.current.screenWidthDp.dp.toPx() * 0.825f - 10.dp.toPx()
+    }
+    var drawerSettleSignal by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var drawerSettleTarget by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    var drawerCancelAnimSignal by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    /** 松手结算：目标态没变时，让 PushDrawerLayout 把进度收到锚点 */
+    fun settleDrawer(open: Boolean) {
+        if (drawerOpen != open) {
+            setDrawerOpen(open)
+        } else {
+            drawerSettleTarget = if (open) 1f else 0f
+            drawerSettleSignal++
+        }
+    }
     var drawer by remember { mutableStateOf(DrawerUiState()) }
     var renameTarget by remember { mutableStateOf<ConversationUi?>(null) }
     var deleteTarget by remember { mutableStateOf<ConversationUi?>(null) }
@@ -181,6 +214,16 @@ private fun App(isDark: Boolean) {
     var webTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showCamera by remember { mutableStateOf(false) }
     var showVoiceTone by remember { mutableStateOf(false) }
+
+    // 选区朗读：读的是「选区起点 → 消息结尾」，读完才退出选择（期间不打断）
+    var selectionClearTick by remember { mutableIntStateOf(0) }
+    var pendingSelectionClear by remember { mutableStateOf(false) }
+    LaunchedEffect(chat.readingState) {
+        if (pendingSelectionClear && chat.readingState == ReadAloudState.Idle) {
+            pendingSelectionClear = false
+            selectionClearTick++
+        }
+    }
 
     // 朗读失败（Key 未填 / 合成报错）用 toast 提示后清掉，避免重复弹
     LaunchedEffect(chat.speechError) {
@@ -485,6 +528,10 @@ private fun App(isDark: Boolean) {
         Screen.Chat -> PushDrawerLayout(
             drawerOpen = drawerOpen,
             onDrawerOpenChange = { setDrawerOpen(it) },
+            externalProgress = drawerProgress,
+            settleSignal = drawerSettleSignal,
+            settleTarget = drawerSettleTarget,
+            cancelAnimationSignal = drawerCancelAnimSignal,
             drawer = { modifier ->
                 ConversationDrawer(
                     state = drawer,
@@ -578,8 +625,14 @@ private fun App(isDark: Boolean) {
                     clipboard.setPrimaryClip(ClipData.newPlainText("message", message.text))
                     Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
                 },
-                onSpeakSelection = { text -> vm.speakSelection(text) },
-                onOpenDrawer = { setDrawerOpen(true) },
+                onSpeakSelection = { text ->
+                    if (vm.speakSelection(text)) pendingSelectionClear = true
+                },
+                clearSelectionTick = selectionClearTick,
+                drawerProgress = drawerProgress,
+                drawerTravelPx = drawerTravelPx,
+                onDrawerSettle = { settleDrawer(it) },
+                onDrawerDragStart = { drawerCancelAnimSignal++ },
                 onSpeakMessage = { message ->
                     if (!vm.speakMessage(message)) {
                         Toast.makeText(context, "这条回答还没有可朗读的正文", Toast.LENGTH_SHORT).show()
