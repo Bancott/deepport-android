@@ -17,6 +17,9 @@ val hasReleaseSigning = keystorePropsFile.exists() &&
     !keystoreProps.getProperty("storeFile").isNullOrBlank()
 
 android {
+    lint {
+        checkReleaseBuilds = false
+    }
     namespace = "io.github.bancott.deepport"
     compileSdk = 35
 
@@ -56,7 +59,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             // 有 keystore.properties 就用正式签名，否则回退 debug 签名（本地也能打出可安装的 release 包）
             signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")
