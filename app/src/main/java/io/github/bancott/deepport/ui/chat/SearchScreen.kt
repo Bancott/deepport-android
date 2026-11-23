@@ -78,7 +78,11 @@ fun SearchScreen(
         label = "searchBarGrow",
     )
     val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // 等转场结束再聚焦：键盘一弹会改变可用高度，转场中重排就是"闪一下"的来源
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(320)
+        runCatching { focus.requestFocus() }
+    }
 
     val hits = remember(query) { if (query.isBlank()) emptyList() else search(query) }
 

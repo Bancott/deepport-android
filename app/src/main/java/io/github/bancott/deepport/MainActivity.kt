@@ -398,14 +398,14 @@ private fun App(isDark: Boolean) {
         transitionSpec = {
             val enteringSearch = targetState == Screen.Search && initialState == Screen.Chat
             val leavingSearch = initialState == Screen.Search && targetState == Screen.Chat
-            if (enteringSearch || leavingSearch) {
-                // 搜索：搜索页从左侧被"推"进来，整个会话页被顶开往右让位；
-                // 返回时反向。抽屉在进入搜索时已经收起，所以不会跟着走。
-                val enter = if (enteringSearch) 1f else -1f
-                (slideInHorizontally(tween(300)) { w -> (-enter * w / 5).toInt() } +
-                    fadeIn(tween(200))) togetherWith
-                    (slideOutHorizontally(tween(300)) { w -> (enter * w / 4).toInt() } +
-                        fadeOut(tween(220)))
+            if (enteringSearch) {
+                // 搜索页直接出现；会话页整体向右移出屏幕，不再让两页互相挤
+                fadeIn(tween(80)) togetherWith
+                    (slideOutHorizontally(tween(260)) { w -> w } + fadeOut(tween(260)))
+            } else if (leavingSearch) {
+                // 返回：会话页从右侧滑回，搜索页淡出
+                (slideInHorizontally(tween(260)) { w -> w } + fadeIn(tween(200))) togetherWith
+                    fadeOut(tween(160))
             } else {
                 val dir = if (navForward) 1 else -1
                 (slideInHorizontally(tween(250)) { w -> dir * (w / 12) } + fadeIn(tween(200))) togetherWith
