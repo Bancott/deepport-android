@@ -34,12 +34,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
@@ -95,29 +97,50 @@ fun DsInputBar(
     onStop: () -> Unit = {},
 ) {
     val colors = DsTheme.colors
-    Surface(
-        shadowElevation = 0.dp,
-        tonalElevation = 0.dp,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = DsDimen.InputHorizontalPadding),
-        shape = RoundedCornerShape(DsDimen.InputCornerRadius),
-        color = colors.surface1,
-        border = BorderStroke(1.dp, colors.outline),
-    ) {
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    // 点「修改并创建分支」后输入栏自动抬起：请求焦点并唤起键盘
+    LaunchedEffect(editing) {
+        if (editing) {
+            runCatching { focusRequester.requestFocus() }
+            keyboard?.show()
+        }
+    }
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (editing) {
+            EditingNotice(
+                onCancel = onCancelEdit,
+                modifier = Modifier.padding(horizontal = DsDimen.InputHorizontalPadding),
+            )
+        }
+        Surface(
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = DsDimen.InputHorizontalPadding),
+            shape = if (editing) {
+                RoundedCornerShape(
+                    topStart = 8.dp,
+                    topEnd = 8.dp,
+                    bottomStart = DsDimen.InputCornerRadius,
+                    bottomEnd = DsDimen.InputCornerRadius,
+                )
+            } else {
+                RoundedCornerShape(DsDimen.InputCornerRadius)
+            },
+            color = colors.surface1,
+            border = BorderStroke(1.dp, colors.outline),
+        ) {
         Column(
             modifier = Modifier.padding(
                 start = 12.dp,
                 end = 10.dp,
-                // 官方实测：卡片高 105.7dp = 上 16 + 文本行 26 + 间距 20 + 操作行 32 + 下 12
+                // 官方实测：卡片高 105.7 dp = 上 16 + 文本行 26 + 间距 20 + 操作行 32 + 下 12
                 top = 16.dp,
                 bottom = 12.dp,
             ),
         ) {
-            if (editing) {
-                EditingNotice(onCancel = onCancelEdit)
-                Spacer(Modifier.height(8.dp))
-            }
 
             if (state.attachments.isNotEmpty()) {
                 PendingAttachmentRow(
@@ -151,6 +174,7 @@ fun DsInputBar(
                 else -> InputTextField(
                     text = state.text,
                     onTextChange = onTextChange,
+                    focusRequester = focusRequester,
                 )
             }
 
@@ -167,6 +191,7 @@ fun DsInputBar(
                 onSend = onSend,
                 onStop = onStop,
             )
+        }
         }
     }
 }
@@ -215,10 +240,10 @@ private fun SuggestionRow(onPick: (String) -> Unit) {
  * 内容 = 分支图标 + 「修改并创建分支」+ 28dp 圆形取消钮，文字 14sp。
  */
 @Composable
-private fun EditingNotice(onCancel: () -> Unit) {
+private fun EditingNotice(onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val colors = DsTheme.colors
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(42.dp)
             .clip(
@@ -263,6 +288,7 @@ private fun EditingNotice(onCancel: () -> Unit) {
 private fun InputTextField(
     text: String,
     onTextChange: (String) -> Unit,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
 ) {
     val colors = DsTheme.colors
     var focused by remember { mutableStateOf(false) }
@@ -272,6 +298,13 @@ private fun InputTextField(
             .fillMaxWidth()
             .heightIn(min = 26.dp)
             .padding(start = 6.dp)
+            .then(
+                if (focusRequester != null) {
+                    Modifier.focusRequester(focusRequester)
+                } else {
+                    Modifier
+                },
+            )
             .onFocusChanged { focused = it.isFocused },
         onValueChange = onTextChange,
         textStyle = DsText.bodyTight.copy(color = colors.textPrimary),
