@@ -178,6 +178,27 @@ fun VoiceToneDialog(
 
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val side = ((maxWidth - CapsuleWidth) / 2).coerceAtLeast(0.dp)
+                // 只用一个固定胶囊：翻页手势交给透明的 Pager，
+                // 胶囊内的流体颜色按翻页进度在相邻两档之间插值，画面平滑过渡。
+                val position = pager.currentPage + pager.currentPageOffsetFraction
+                val palette = interpolatePalette(
+                    VoiceTones[position.toInt().coerceIn(0, VoiceTones.lastIndex)].palette,
+                    VoiceTones[(position.toInt() + 1).coerceIn(0, VoiceTones.lastIndex)].palette,
+                    position - position.toInt(),
+                )
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(CapsuleHeight),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    FluidCapsule(
+                        modifier = Modifier
+                            .size(CapsuleWidth, CapsuleHeight)
+                            .clip(RoundedCornerShape(CapsuleHeight / 2)),
+                        palette = palette,
+                    )
+                }
                 HorizontalPager(
                     state = pager,
                     modifier = Modifier
@@ -185,14 +206,7 @@ fun VoiceToneDialog(
                         .height(CapsuleHeight),
                     contentPadding = PaddingValues(horizontal = side),
                     pageSpacing = 20.dp,
-                ) { page ->
-                    FluidCapsule(
-                        modifier = Modifier
-                            .size(CapsuleWidth, CapsuleHeight)
-                            .clip(RoundedCornerShape(CapsuleHeight / 2)),
-                        voice = VoiceTones[page],
-                    )
-                }
+                ) { /* 透明页：只负责手势 */ }
             }
 
             Spacer(Modifier.height(24.dp))
@@ -274,17 +288,25 @@ fun VoiceToneDialog(
  * 保证不崩溃且观感一致。
  */
 @Composable
-private fun FluidCapsule(modifier: Modifier = Modifier, voice: VoiceTone) {
+private fun FluidCapsule(modifier: Modifier = Modifier, palette: List<Color>) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        AgslFluidCapsule(modifier = modifier, voice = voice)
+        AgslFluidCapsule(modifier = modifier, palette = palette)
     } else {
-        GradientFluidCapsule(modifier = modifier, voice = voice)
+        GradientFluidCapsule(modifier = modifier, palette = palette)
+    }
+}
+
+/** 相邻音色的三色 palette 线性插值：翻页到一半时颜色正好是两者的混合 */
+private fun interpolatePalette(a: List<Color>, b: List<Color>, t: Float): List<Color> {
+    val f = t.coerceIn(0f, 1f)
+    return List(3) { i ->
+        androidx.compose.ui.graphics.lerp(a[i], b[i], f)
     }
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
-private fun AgslFluidCapsule(modifier: Modifier = Modifier, voice: VoiceTone) {
+private fun AgslFluidCapsule(modifier: Modifier = Modifier, palette: List<Color>) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
     val source = remember {
@@ -293,7 +315,7 @@ private fun AgslFluidCapsule(modifier: Modifier = Modifier, voice: VoiceTone) {
     // 着色器编译失败时回退到渐变实现，避免个别 ROM 上直接崩
     val shader = remember(source) { runCatching { RuntimeShader(source) }.getOrNull() }
     if (shader == null) {
-        GradientFluidCapsule(modifier = modifier, voice = voice)
+        GradientFluidCapsule(modifier = modifier, palette = palette)
         return
     }
 
@@ -311,9 +333,9 @@ private fun AgslFluidCapsule(modifier: Modifier = Modifier, voice: VoiceTone) {
     Canvas(modifier = modifier) {
         // AGSL 里是 `uniform float4 colorN;`（不是 layout(color)），只能用 float 通道设置；
         // 用 setColorUniform 会抛 "attempting to set a color uniform using the non-color specific APIs"
-        shader.setFloatUniform("color1", voice.palette[0].red, voice.palette[0].green, voice.palette[0].blue, 1f)
-        shader.setFloatUniform("color2", voice.palette[1].red, voice.palette[1].green, voice.palette[1].blue, 1f)
-        shader.setFloatUniform("color3", voice.palette[2].red, voice.palette[2].green, voice.palette[2].blue, 1f)
+        shader.setFloatUniform("color1", palette[0].red, palette[0].green, palette[0].blue, 1f)
+        shader.setFloatUniform("color2", palette[1].red, palette[1].green, palette[1].blue, 1f)
+        shader.setFloatUniform("color3", palette[2].red, palette[2].green, palette[2].blue, 1f)
         shader.setFloatUniform("resolution", size.width, size.height)
         shader.setFloatUniform("offset", 0f, 0.8f)
         shader.setFloatUniform("time", clock * 0.008f)
@@ -335,7 +357,7 @@ private fun AgslFluidCapsule(modifier: Modifier = Modifier, voice: VoiceTone) {
 
 /** API < 33 的退化实现：同色系的三团渐变云，12s 循环。 */
 @Composable
-private fun GradientFluidCapsule(modifier: Modifier = Modifier, voice: VoiceTone) {
+private fun GradientFluidCapsule(modifier: Modifier = Modifier, palette: List<Color>) {
     val transition = rememberInfiniteTransition(label = "fluidFallback")
     val phase by transition.animateFloat(
         initialValue = 0f,
@@ -346,9 +368,9 @@ private fun GradientFluidCapsule(modifier: Modifier = Modifier, voice: VoiceTone
         ),
         label = "fluidFallbackPhase",
     )
-    val base = voice.palette[0]
-    val mid = voice.palette[1]
-    val deep = voice.palette[2]
+    val base = palette[0]
+    val mid = palette[1]
+    val deep = palette[2]
     Canvas(modifier = modifier) {
         drawRect(base)
         val w = size.width
