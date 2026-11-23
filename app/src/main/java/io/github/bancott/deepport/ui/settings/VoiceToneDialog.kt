@@ -8,6 +8,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -138,7 +140,30 @@ fun VoiceToneDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(SheetHeight),
+                .height(SheetHeight)
+                // 胶囊外的卡片区域也能左右滑动切换音色：
+                // 胶囊内部由 Pager 自己处理，这里兜底处理其余区域的横向手势。
+                .pointerInput(pager) {
+                    var total = 0f
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { _, dragAmount -> total += dragAmount },
+                        onDragEnd = {
+                            if (total <= -60f) {
+                                scope.launch {
+                                    pager.animateScrollToPage(
+                                        (pager.currentPage + 1).coerceAtMost(VoiceTones.lastIndex),
+                                    )
+                                }
+                            } else if (total >= 60f) {
+                                scope.launch {
+                                    pager.animateScrollToPage((pager.currentPage - 1).coerceAtLeast(0))
+                                }
+                            }
+                            total = 0f
+                        },
+                        onDragCancel = { total = 0f },
+                    )
+                },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 顶栏 56dp：标题居中，右端 40dp 关闭
