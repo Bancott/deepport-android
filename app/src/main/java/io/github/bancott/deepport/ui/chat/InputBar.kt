@@ -240,10 +240,10 @@ private fun EditingNotice(onCancel: () -> Unit, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .height(40.dp)
             .clip(
-                // 与卡片同曲率：外圆角 28dp、内缩 4dp，同心圆角 = 24dp
+                // 曲率以输入卡为准：顶角与卡片同为 28dp
                 RoundedCornerShape(
-                    topStart = 24.dp,
-                    topEnd = 24.dp,
+                    topStart = DsDimen.InputCornerRadius,
+                    topEnd = DsDimen.InputCornerRadius,
                     bottomStart = 8.dp,
                     bottomEnd = 8.dp,
                 ),
@@ -286,8 +286,30 @@ private fun InputTextField(
 ) {
     val colors = DsTheme.colors
     var focused by remember { mutableStateOf(false) }
+    // 外部回填（例如点「修改并创建分支」）时把光标放到文本结尾，
+    // 否则 String 版 BasicTextField 会默认落在开头。
+    var fieldValue by remember {
+        mutableStateOf(
+            androidx.compose.ui.text.input.TextFieldValue(
+                text,
+                androidx.compose.ui.text.TextRange(text.length),
+            ),
+        )
+    }
+    LaunchedEffect(text) {
+        if (fieldValue.text != text) {
+            fieldValue = androidx.compose.ui.text.input.TextFieldValue(
+                text,
+                androidx.compose.ui.text.TextRange(text.length),
+            )
+        }
+    }
     BasicTextField(
-        value = text,
+        value = fieldValue,
+        onValueChange = { value ->
+            fieldValue = value
+            onTextChange(value.text)
+        },
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 26.dp)
@@ -300,7 +322,6 @@ private fun InputTextField(
                 },
             )
             .onFocusChanged { focused = it.isFocused },
-        onValueChange = onTextChange,
         textStyle = DsText.bodyTight.copy(color = colors.textPrimary),
         cursorBrush = SolidColor(colors.primary),
         maxLines = 5,
