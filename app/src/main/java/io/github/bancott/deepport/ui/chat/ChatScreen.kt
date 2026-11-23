@@ -219,9 +219,11 @@ fun ChatScreen(
                     if (reading) {
                         SpeakerWaveGlyph(color = colors.primary, iconSize = 24.dp)
                     } else {
-                        io.github.bancott.deepport.ui.common.SpeakerToggleGlyph(
+                        // 官方图标：关闭 = mute 位图（自带斜线），开启 = play 位图；动效暂时不做
+                        SpeakerGlyph(
                             color = colors.textPrimary,
-                            enabled = speechOn,
+                            muted = !speechOn,
+                            reading = false,
                             iconSize = 24.dp,
                         )
                     }

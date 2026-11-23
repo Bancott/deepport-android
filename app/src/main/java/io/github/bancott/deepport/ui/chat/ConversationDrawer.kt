@@ -688,8 +688,10 @@ private fun MultiSelectBar(
         )
         Row(
             modifier = Modifier
+                // 与底部账户行同高（64dp，含 1dp 分隔线）：切多选时列表视口高度不变，
+                // 避免 LazyColumn 因高度变化重算锚点、看起来标题整体上移
                 .fillMaxWidth()
-                .height(61.dp),
+                .height(63.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
