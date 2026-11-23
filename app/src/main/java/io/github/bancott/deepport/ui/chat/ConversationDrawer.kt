@@ -432,12 +432,10 @@ private fun ConversationList(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            val shiftPx = with(LocalDensity.current) { titleShift.dp.toPx() }
                             Row(
                                 modifier = Modifier
-                                    // 只做水平位移：offset 会参与布局，换成绘制期平移，
-                                    // 避免多选切换时标题出现向右上方的斜移
-                                    .graphicsLayer { translationX = shiftPx }
+                                    // 纯水平位移：用左内边距推开，行高与基线不变
+                                    .padding(start = titleShift.dp)
                                     .weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {

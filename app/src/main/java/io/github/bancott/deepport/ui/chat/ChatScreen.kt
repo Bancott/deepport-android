@@ -205,6 +205,7 @@ fun ChatScreen(
                 val speechOn = state.isSpeechOutputOn
                 CircleIconButton(
                     contentDescription = if (speechOn) "关闭自动朗读" else "开启自动朗读",
+                    ripple = false,
                     onClick = {
                         if (reading) {
                             // 朗读中：一次点击就停，而不是先切开关
@@ -278,8 +279,9 @@ fun ChatScreen(
                     // 消息区底部不加渐隐：官方是输入栏自己带一条硬边背景，不是渐变
                     // 用户消息长按菜单：锚在气泡上沿（网页给的 CSS px → dp）
                     userMenu?.let { (msg, at) ->
-                        val anchorX = with(density) { at.x.toDp() }
-                        val anchorY = with(density) { at.y.toDp() }
+                        // 网页里的 clientX/Y 是 CSS px（= dp），不能再除以 density
+                        val anchorX = at.x.dp
+                        val anchorY = at.y.dp
                         MessageMenuPopup(
                             message = msg,
                             expanded = true,

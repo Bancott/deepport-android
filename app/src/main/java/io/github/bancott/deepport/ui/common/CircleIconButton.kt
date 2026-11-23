@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +30,8 @@ fun CircleIconButton(
     size: Dp = DsDimen.IconButtonSize,
     containerColor: Color = Color.Transparent,
     enabled: Boolean = true,
+    /** false = 不要点击时的圆形波纹（官方的顶栏朗读按钮没有） */
+    ripple: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     Box(
@@ -40,6 +43,12 @@ fun CircleIconButton(
                 enabled = enabled,
                 role = Role.Button,
                 onClickLabel = contentDescription,
+                indication = if (ripple) {
+                    androidx.compose.material3.ripple()
+                } else {
+                    null
+                },
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                 onClick = onClick,
             )
             .semantics { this.contentDescription = contentDescription },

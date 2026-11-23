@@ -548,8 +548,6 @@
     var atBottom = max - list.scrollTop < 24
     jump.classList.toggle('show', overscroll && !atBottom)
     jump.classList.toggle('generating', generating)
-    // 刚渲染完不显示滚动条，等用户真的滑动再显示
-    if (!thumb.classList.contains('visible')) thumb.style.opacity = '0'
   }
 
   function flashScrollbar() {

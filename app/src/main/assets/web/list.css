@@ -22,7 +22,12 @@ html, body.list-page {
 .msg + .msg { margin-top: 2px; }
 
 /* 用户气泡 */
-.msg.user { display: flex; justify-content: flex-end; padding: 12px 16px 0 72px; }
+.msg.user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 12px 16px 0 72px;
+}
 .msg.user .bubble {
   max-width: 100%;
   /* 长按弹原生菜单，不走系统选词；否则长按会先起选区、菜单被抢 */
@@ -317,6 +322,7 @@ html, body.list-page {
   position: fixed;
   right: 14px;
   bottom: 18px;
+  border: 1px solid var(--outline, #3a3a3c);
   width: 40px;
   height: 40px;
   border: none;
@@ -338,7 +344,7 @@ html, body.list-page {
 .jump-bottom.generating .jump-ring {
   display: block;
   position: absolute;
-  inset: -3px;
+  inset: 0;
   border-radius: 50%;
   border: 2px solid transparent;
   border-top-color: var(--link, #4d6bfe);

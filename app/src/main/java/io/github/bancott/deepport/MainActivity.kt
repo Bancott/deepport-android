@@ -628,6 +628,8 @@ private fun App(isDark: Boolean) {
                 onSpeakSelection = { text, messageId ->
                     if (vm.speakSelection(text, messageId)) pendingSelectionClear = true
                 },
+                onStopSpeaking = { vm.stopSpeaking() },
+                onContinueMessage = { vm.continueMessage(it) },
                 clearSelectionTick = selectionClearTick,
                 drawerProgress = drawerProgress,
                 drawerTravelPx = drawerTravelPx,
