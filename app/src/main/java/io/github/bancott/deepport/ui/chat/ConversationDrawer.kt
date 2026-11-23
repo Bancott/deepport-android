@@ -141,25 +141,25 @@ fun ConversationDrawer(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(HeaderSlotHeight),
             ) {
-                AnimatedContent(
+                androidx.compose.animation.Crossfade(
                     targetState = state.multiSelect,
-                    transitionSpec = {
-                        val spec = tween<Float>(200, easing = headerEasing)
-                        fadeIn(spec) togetherWith fadeOut(spec)
-                    },
-                    modifier = Modifier.fillMaxSize(),
+                    animationSpec = tween(200, easing = headerEasing),
                     label = "DrawerHeaderTransition",
                 ) { multiSelect ->
-                    Box(Modifier.fillMaxSize()) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(HeaderSlotHeight),
+                    ) {
                         if (multiSelect) {
                             MultiSelectHeader(
                                 onClose = onExitMultiSelect,
                                 selectedCount = state.selectedCount,
                             )
                         } else {
-                            Column(Modifier.fillMaxSize()) {
+                            Column(Modifier.fillMaxWidth()) {
                                 Spacer(Modifier.height(8.dp))
                                 SearchField(onClick = onSearchClick)
                             }
@@ -186,14 +186,21 @@ fun ConversationDrawer(
                 )
             }
 
-            if (state.multiSelect) {
-                MultiSelectBar(
-                    enabled = state.selectedCount > 0,
-                    onPin = onPinSelected,
-                    onDelete = onDeleteSelected,
-                )
-            } else {
-                DrawerFooter(name = state.userName, avatarUrl = state.avatarUrl, onClick = onFooterClick)
+            // 底栏固定 64dp：多选栏与账户行同高，列表视口高度在切换前后完全一致
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(FooterSlotHeight),
+            ) {
+                if (state.multiSelect) {
+                    MultiSelectBar(
+                        enabled = state.selectedCount > 0,
+                        onPin = onPinSelected,
+                        onDelete = onDeleteSelected,
+                    )
+                } else {
+                    DrawerFooter(name = state.userName, avatarUrl = state.avatarUrl, onClick = onFooterClick)
+                }
             }
         }
     }
@@ -688,8 +695,6 @@ private fun MultiSelectBar(
         )
         Row(
             modifier = Modifier
-                // 与底部账户行同高（64dp，含 1dp 分隔线）：切多选时列表视口高度不变，
-                // 避免 LazyColumn 因高度变化重算锚点、看起来标题整体上移
                 .fillMaxWidth()
                 .height(63.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -805,3 +810,9 @@ private fun RemoteAvatar(url: String, size: androidx.compose.ui.unit.Dp) {
         )
     }
 }
+
+/** 头部槽位固定高度：普通头（8 + 42）与多选头同高 */
+private val HeaderSlotHeight = 50.dp
+
+/** 底栏槽位固定高度：账户行与多选栏同高 */
+private val FooterSlotHeight = 64.dp
