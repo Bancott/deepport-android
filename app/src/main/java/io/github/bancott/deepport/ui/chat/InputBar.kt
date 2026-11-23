@@ -114,19 +114,22 @@ fun DsInputBar(
             .padding(horizontal = DsDimen.InputHorizontalPadding),
         shape = RoundedCornerShape(DsDimen.InputCornerRadius),
         color = colors.surface1,
-        // 编辑态：头部块本身贴住上边界，不画 1dp 描边，避免描边在块与卡片之间看起来像一条缝
-        border = if (editing) null else BorderStroke(1.dp, colors.outline),
+        border = BorderStroke(1.dp, colors.outline),
     ) {
     Column {
-    // 「修改并创建分支」在输入卡内部，贴着卡片上边界（不额外留白）
+    // 「修改并创建分支」在输入卡内部，与卡片边界留一点距离（8dp）
     if (editing) {
-        EditingNotice(onCancel = onCancelEdit)
+        Box(
+            Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
+        ) {
+            EditingNotice(onCancel = onCancelEdit)
+        }
     }
     Column(
         modifier = Modifier.padding(
             start = 12.dp,
             end = 10.dp,
-            // 编辑态头部贴边，正文从 10dp 开始；普通态仍是官方 16dp
+            // 编辑态头部块自身带 8dp 上边距，正文与块之间再留 10dp
             top = if (editing) 10.dp else 16.dp,
             bottom = 12.dp,
         ),
@@ -236,14 +239,7 @@ private fun EditingNotice(onCancel: () -> Unit, modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(42.dp)
-            .clip(
-                RoundedCornerShape(
-                    topStart = DsDimen.InputCornerRadius,
-                    topEnd = DsDimen.InputCornerRadius,
-                    bottomStart = 0.dp,
-                    bottomEnd = 0.dp,
-                ),
-            )
+            .clip(RoundedCornerShape(16.dp))
             .background(colors.primaryContainer)
             .padding(start = 14.dp, top = 7.dp, end = 9.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
