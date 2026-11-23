@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -68,6 +69,14 @@ fun SearchScreen(
     val colors = DsTheme.colors
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
+    // 进场：搜索栏从左侧短一点的位置，边右移边变长到全宽
+    var entered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { entered = true }
+    val grow by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(280),
+        label = "searchBarGrow",
+    )
     val keyboard = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
@@ -84,7 +93,13 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
-                .padding(start = 8.dp, end = 12.dp),
+                .padding(start = 8.dp, end = 12.dp)
+                // 以左端为锚点：宽度 86%→100%，同时整体右移，看起来像被搜索栏顶开
+                .graphicsLayer {
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                    scaleX = 0.86f + 0.14f * grow
+                    translationX = -28.dp.toPx() * (1f - grow)
+                },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CircleIconButton(contentDescription = "返回", onClick = onBack) {

@@ -160,6 +160,8 @@ private fun App(isDark: Boolean) {
     // 转场方向：+1 = 进页（新页从右侧滑入），-1 = 返回（新页从左侧滑入）。
     // 官方 2.8.0 的录屏里返回就是「新页自左 1/12 屏宽滑入 + 淡入，旧页向右滑出 + 快速淡出」。
     var navForward by remember { mutableStateOf(true) }
+    // 搜索是从抽屉里进的：进搜索时把历史界面收掉，返回时再恢复
+    var searchFromDrawer by remember { mutableStateOf(false) }
 
     fun navPush(target: Screen) {
         if (navStack.last().screen == target) return
@@ -394,15 +396,33 @@ private fun App(isDark: Boolean) {
     AnimatedContent(
         targetState = screen,
         transitionSpec = {
-            val dir = if (navForward) 1 else -1
-            (slideInHorizontally(tween(250)) { w -> dir * (w / 12) } + fadeIn(tween(200))) togetherWith
-                (slideOutHorizontally(tween(250)) { w -> -dir * (w / 12) } + fadeOut(tween(100)))
+            val enteringSearch = targetState == Screen.Search && initialState == Screen.Chat
+            val leavingSearch = initialState == Screen.Search && targetState == Screen.Chat
+            if (enteringSearch || leavingSearch) {
+                // 搜索：搜索页从左侧被"推"进来，整个会话页被顶开往右让位；
+                // 返回时反向。抽屉在进入搜索时已经收起，所以不会跟着走。
+                val enter = if (enteringSearch) 1f else -1f
+                (slideInHorizontally(tween(300)) { w -> (-enter * w / 5).toInt() } +
+                    fadeIn(tween(200))) togetherWith
+                    (slideOutHorizontally(tween(300)) { w -> (enter * w / 4).toInt() } +
+                        fadeOut(tween(220)))
+            } else {
+                val dir = if (navForward) 1 else -1
+                (slideInHorizontally(tween(250)) { w -> dir * (w / 12) } + fadeIn(tween(200))) togetherWith
+                    (slideOutHorizontally(tween(250)) { w -> -dir * (w / 12) } + fadeOut(tween(100)))
+            }
         },
         label = "pageTransition",
     ) { target ->
     when (target) {
         Screen.Search -> SearchScreen(
-            onBack = { navBack() },
+            onBack = {
+                navBack()
+                if (searchFromDrawer) {
+                    setDrawerOpen(true)
+                    searchFromDrawer = false
+                }
+            },
             onOpenConversation = { id ->
                 vm.open(id)
                 navResetToChat()
@@ -537,8 +557,9 @@ private fun App(isDark: Boolean) {
                     state = drawer,
                     modifier = modifier,
                     onSearchClick = {
-                        // 保留抽屉的展开状态：搜索是从抽屉里进的，返回 pop 回来仍是
-                        // "左历史右会话"，而不是掉到纯会话页
+                        // 进入搜索：历史界面先收起（整个右界面被顶开），返回时再恢复
+                        searchFromDrawer = drawerOpen
+                        if (drawerOpen) setDrawerOpen(false)
                         navPush(Screen.Search)
                     },
                     onConversationClick = { conversation ->
