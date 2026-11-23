@@ -416,13 +416,7 @@ private fun App(isDark: Boolean) {
     ) { target ->
     when (target) {
         Screen.Search -> SearchScreen(
-            onBack = {
-                navBack()
-                if (searchFromDrawer) {
-                    setDrawerOpen(true)
-                    searchFromDrawer = false
-                }
-            },
+            onBack = { navBack() },
             onOpenConversation = { id ->
                 vm.open(id)
                 navResetToChat()
@@ -557,9 +551,8 @@ private fun App(isDark: Boolean) {
                     state = drawer,
                     modifier = modifier,
                     onSearchClick = {
-                        // 进入搜索：历史界面先收起（整个右界面被顶开），返回时再恢复
-                        searchFromDrawer = drawerOpen
-                        if (drawerOpen) setDrawerOpen(false)
+                        // 直接进搜索：不先收起抽屉，避免会话页先"闪一下全屏"再退场；
+                        // 整块会话页（含历史）随转场一起被顶开，返回走同一套反向动画。
                         navPush(Screen.Search)
                     },
                     onConversationClick = { conversation ->
