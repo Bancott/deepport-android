@@ -40,18 +40,7 @@ class ChatRepository(
         system: String = DeepSeekApi.systemPrompt(),
         temperature: Float = 1.0f,
         thinkingBudget: Int? = null,
-        protocol: String = "anthropic",
-    ): Flow<StreamEvent> = (if (protocol == "openai") {
-        api.streamOpenAi(
-            origin = baseUrl,
-            apiKey = apiKey,
-            model = model,
-            messages = messages,
-            system = system,
-            temperature = temperature,
-        )
-    } else {
-        api.streamMessage(
+    ): Flow<StreamEvent> = api.streamMessage(
         origin = baseUrl,
         apiKey = apiKey,
         model = model,
@@ -62,8 +51,7 @@ class ChatRepository(
         system = system,
         temperature = temperature,
         thinkingBudget = thinkingBudget,
-        )
-    }).map { event ->
+    ).map { event ->
         when (event) {
             is ApiEvent.Thinking -> StreamEvent.Reasoning(event.delta)
             is ApiEvent.Text -> StreamEvent.Content(event.delta)

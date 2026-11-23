@@ -15,10 +15,6 @@ class SettingsStore private constructor(context: Context) {
         .getSharedPreferences("ds_settings", Context.MODE_PRIVATE)
 
     var apiKey by mutableStateOf(prefs.getString(KEY_API, "").orEmpty())
-    /** 供应商：deepseek / kimi / qwen / custom */
-    var provider by mutableStateOf(prefs.getString(KEY_PROVIDER, "deepseek").orEmpty())
-    /** 协议：anthropic（DeepSeek 原生） / openai（Kimi、千问等兼容接口） */
-    var protocol by mutableStateOf(prefs.getString(KEY_PROTOCOL, "anthropic").orEmpty())
         private set
 
     var baseUrl by mutableStateOf(
@@ -71,22 +67,6 @@ class SettingsStore private constructor(context: Context) {
         val clean = TTS_VOICES.firstOrNull { it.first == value }?.first ?: DEFAULT_TTS_VOICE
         ttsVoice = clean
         prefs.edit().putString(KEY_TTS_VOICE, clean).apply()
-    }
-
-    fun updateProvider(value: String, newBaseUrl: String, newProtocol: String) {
-        provider = value
-        baseUrl = newBaseUrl
-        protocol = newProtocol
-        prefs.edit()
-            .putString(KEY_PROVIDER, value)
-            .putString(KEY_BASE, newBaseUrl)
-            .putString(KEY_PROTOCOL, newProtocol)
-            .apply()
-    }
-
-    fun updateProtocol(value: String) {
-        protocol = value
-        prefs.edit().putString(KEY_PROTOCOL, value).apply()
     }
 
     fun updateBaseUrl(value: String) {
@@ -153,8 +133,6 @@ class SettingsStore private constructor(context: Context) {
         prefs.edit()
             .putString(KEY_API, apiKey)
             .putString(KEY_BASE, baseUrl)
-        .putString(KEY_PROVIDER, provider)
-        .putString(KEY_PROTOCOL, protocol)
             .putString(KEY_MODEL, model)
             .apply()
     }
@@ -190,9 +168,7 @@ class SettingsStore private constructor(context: Context) {
             "deepseek-reasoner" to "深度思考（R1）",
         )
 
-        private const val KEY_PROVIDER = "provider"
-private const val KEY_PROTOCOL = "protocol"
-private const val KEY_API = "api_key"
+        private const val KEY_API = "api_key"
         private const val KEY_BASE = "base_url"
         private const val KEY_MODEL = "model"
         private const val KEY_THEME = "theme_mode"

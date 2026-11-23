@@ -808,7 +808,6 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 system = io.github.bancott.deepport.data.DeepSeekApi.systemPrompt(settings.roleDefinition),
                 temperature = settings.temperature,
                 thinkingBudget = settings.thinkingBudgetTokens(),
-                protocol = settings.protocol,
             ).collect { event ->
                 when (event) {
                     is StreamEvent.Reasoning -> {
