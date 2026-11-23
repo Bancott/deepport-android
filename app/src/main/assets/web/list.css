@@ -339,7 +339,7 @@ html, body.list-page {
   z-index: 21;
 }
 .jump-bottom.show { opacity: 1; transform: scale(1); pointer-events: auto; }
-.jump-bottom .jump-arrow { width: 20px; height: 20px; }
+.jump-bottom .jump-arrow { width: 20px; height: 20px; display: block; }
 .jump-bottom .jump-ring { display: none; }
 .jump-bottom.generating .jump-ring {
   display: block;

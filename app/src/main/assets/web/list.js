@@ -519,9 +519,10 @@
     jump.className = 'jump-bottom'
     jump.type = 'button'
     jump.setAttribute('aria-label', '回到底部')
+    // 官方 ic_chevron_down_outline_20 的几何（20 画框、1.5 线宽）
     jump.innerHTML =
-      '<svg class="jump-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' +
-      '<path d="M12 4v14"/><path d="M6 12l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '<svg class="jump-arrow" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">' +
+      '<path d="M4.375 8.19L8.728 12.539C9.258 13.068 9.523 13.333 9.844 13.384C9.947 13.401 10.053 13.401 10.156 13.384C10.477 13.333 10.742 13.068 11.272 12.539L15.625 8.19"/></svg>' +
       '<span class="jump-ring"></span>'
     jump.addEventListener('click', function () { window.scrollToBottom() })
     document.body.appendChild(thumb)

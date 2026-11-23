@@ -219,9 +219,10 @@ fun ChatScreen(
                     if (reading) {
                         SpeakerWaveGlyph(color = colors.primary, iconSize = 24.dp)
                     } else {
-                        io.github.bancott.deepport.ui.common.SpeakerToggleGlyph(
+                        SpeakerGlyph(
                             color = colors.textPrimary,
-                            enabled = speechOn,
+                            muted = !speechOn,
+                            reading = false,
                             iconSize = 24.dp,
                         )
                     }

@@ -273,11 +273,12 @@ private fun SearchField(onClick: () -> Unit) {
 @Composable
 private fun MultiSelectHeader(onClose: () -> Unit, selectedCount: Int) {
     val colors = DsTheme.colors
-    // 官方：头高 48dp，标题 17sp / 500；有选中时文案是「已选择 N 个对话」
+    // 与普通头（8 + 42 = 50dp）同高：切多选时列表不会上下移动，
+    // 标题才能表现为纯水平位移
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(50.dp)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
