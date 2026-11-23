@@ -247,33 +247,30 @@ private fun EditingNotice(onCancel: () -> Unit, modifier: Modifier = Modifier) {
                     bottomEnd = 6.dp,
                 ),
             )
-            .background(colors.surface2)
-            .padding(start = 16.dp, end = 6.dp),
+            .background(colors.primaryContainer)
+            .padding(start = 14.dp, top = 7.dp, end = 9.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        SvgIcon(
+            R.drawable.ic_branch_outline_20,
+            tint = colors.primary,
+            size = 16.dp,
+        )
+        Spacer(Modifier.width(6.dp))
         Text(
             text = "修改并创建分支",
             style = DsText.bodyTight.copy(fontSize = 15.sp),
-            color = colors.textPrimary,
+            color = colors.primary,
             modifier = Modifier.weight(1f),
         )
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(colors.surface3)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    role = Role.Button,
-                    onClickLabel = "取消编辑",
-                    onClick = onCancel,
-                ),
-            contentAlignment = Alignment.Center,
+        CircleIconButton(
+            contentDescription = "取消编辑",
+            onClick = onCancel,
+            size = 32.dp,
         ) {
             SvgIcon(
                 R.drawable.ic_close_outline_16,
-                tint = colors.textPrimary,
+                tint = colors.textSecondary,
                 size = 16.dp,
             )
         }
