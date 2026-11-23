@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -100,6 +101,65 @@ class ConversationStore(context: Context) {
                 },
             )
         }
+    }
+
+    /**
+     * 导入历史对话（官方 App 导出的 JSON 为主，兼容常见字段名）：
+     * - 顶层可以是数组，或 { "conversations": [...] } / { "data": [...] }
+     * - 每条会话：title + messages[]，消息取 role/sender 与 content/text
+     * 导入时全部重新分配 id、按顺序串成单链，避免与现有数据冲突。
+     */
+    fun importJson(text: String): Int {
+        val root = runCatching { JSONTokener(text).nextValue() }.getOrNull() ?: return 0
+        val list: JSONArray = when (root) {
+            is JSONArray -> root
+            is JSONObject -> root.optJSONArray("conversations")
+                ?: root.optJSONArray("data")
+                ?: JSONArray().put(root)
+            else -> return 0
+        }
+        var imported = 0
+        for (i in 0 until list.length()) {
+            val obj = list.optJSONObject(i) ?: continue
+            val messages = obj.optJSONArray("messages") ?: continue
+            val title = obj.optString("title").ifBlank { "导入的对话" }.take(30)
+            val out = mutableListOf<MessageUi>()
+            val active = mutableMapOf<String, String>()
+            var parentKey = ""
+            var parentId: String? = null
+            for (j in 0 until messages.length()) {
+                val m = messages.optJSONObject(j) ?: continue
+                val roleRaw = m.optString("role").ifBlank { m.optString("sender") }
+                val content = m.optString("content").ifBlank { m.optString("text") }
+                if (content.isBlank()) continue
+                val role = if (
+                    roleRaw.contains("user", true) || roleRaw.contains("human", true)
+                ) ChatRole.User else ChatRole.Assistant
+                val id = (if (role == ChatRole.User) "u-" else "a-") + newId()
+                out += MessageUi(
+                    id = id,
+                    role = role,
+                    text = content,
+                    status = MessageStatus.Completed,
+                    parentId = parentId,
+                )
+                active[parentKey] = id
+                parentKey = id
+                parentId = id
+            }
+            if (out.isEmpty()) continue
+            upsert(
+                StoredConversation(
+                    id = newId(),
+                    title = title,
+                    updatedAt = System.currentTimeMillis(),
+                    messages = out,
+                    activeChild = active,
+                ),
+            )
+            imported++
+        }
+        return imported
     }
 
     fun delete(id: String) {

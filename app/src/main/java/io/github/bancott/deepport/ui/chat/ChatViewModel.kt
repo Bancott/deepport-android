@@ -376,6 +376,9 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 清空所有历史对话，并回到新会话（调用方负责切到 IO 线程） */
+    /** 导入历史对话（JSON），返回导入的会话条数 */
+    fun importConversations(text: String): Int = store.importJson(text)
+
     fun deleteAllConversations() {
         store.loadAll().forEach { store.delete(it.id) }
         newChat()

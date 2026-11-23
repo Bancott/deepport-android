@@ -264,6 +264,7 @@ fun DataScreen(
     onBack: () -> Unit,
     onShareCurrent: () -> String? = { null },
     onExportAll: () -> Unit = {},
+    onImport: () -> Unit = {},
     onDeleteAll: () -> Unit = {},
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -291,7 +292,10 @@ fun DataScreen(
         }
 
         Spacer(Modifier.height(12.dp))
-        Card { RowItem(title = "导出所有历史对话", onClick = onExportAll) }
+        Card {
+            RowItem(title = "导出所有历史对话", onClick = onExportAll)
+            RowItem(title = "导入历史对话", onClick = onImport)
+        }
 
         Spacer(Modifier.height(12.dp))
         Card {

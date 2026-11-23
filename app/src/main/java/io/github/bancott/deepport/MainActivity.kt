@@ -275,6 +275,34 @@ private fun App(isDark: Boolean) {
         }
     }
 
+    // 导入历史对话：选一个 JSON 文件，解析后写入本地库并刷新抽屉
+    val importHistory = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val text = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)
+                            ?.bufferedReader()
+                            ?.use { it.readText() }
+                    }.getOrNull()
+                }
+                if (text.isNullOrBlank()) {
+                    Toast.makeText(context, "文件是空的或无法读取", Toast.LENGTH_SHORT).show()
+                } else {
+                    val count = withContext(Dispatchers.IO) { vm.importConversations(text) }
+                    refreshDrawer()
+                    Toast.makeText(
+                        context,
+                        if (count > 0) "已导入 $count 条对话" else "没有识别到可导入的对话",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+        }
+    }
+
     // 启动时先备好列表，抽屉打开就能直接出内容，不用等一次查询
     LaunchedEffect(Unit) { refreshDrawer() }
 
@@ -441,6 +469,13 @@ private fun App(isDark: Boolean) {
             DataScreen(
                 onBack = { navBack() },
                 onShareCurrent = { vm.currentConversationText() },
+                onImport = {
+                    runCatching {
+                        importHistory.launch(arrayOf("application/json", "text/plain", "*/*"))
+                    }.onFailure {
+                        Toast.makeText(context, "没有可用的文件选择器", Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onExportAll = {
                     scope.launch {
                         val text = withContext(Dispatchers.IO) { vm.exportAllText() }
