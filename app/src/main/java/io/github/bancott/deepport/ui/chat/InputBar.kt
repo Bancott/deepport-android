@@ -120,7 +120,7 @@ fun DsInputBar(
     // 「修改并创建分支」在输入卡内部，与卡片边界留一点距离（8dp）
     if (editing) {
         Box(
-            Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp),
+            Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp),
         ) {
             EditingNotice(onCancel = onCancelEdit)
         }
@@ -238,33 +238,43 @@ private fun EditingNotice(onCancel: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(42.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(colors.primaryContainer)
-            .padding(start = 14.dp, top = 7.dp, end = 9.dp, bottom = 7.dp),
+            .height(40.dp)
+            .clip(
+                RoundedCornerShape(
+                    topStart = 20.dp,
+                    topEnd = 20.dp,
+                    bottomStart = 6.dp,
+                    bottomEnd = 6.dp,
+                ),
+            )
+            .background(colors.surface2)
+            .padding(start = 16.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SvgIcon(
-            R.drawable.ic_branch_outline_20,
-            tint = colors.primary,
-            size = 16.dp,
-        )
-        Spacer(Modifier.width(6.dp))
         Text(
             text = "修改并创建分支",
-            style = DsText.bodyTight.copy(fontSize = 14.sp),
-            color = colors.primary,
+            style = DsText.bodyTight.copy(fontSize = 15.sp),
+            color = colors.textPrimary,
             modifier = Modifier.weight(1f),
         )
-        CircleIconButton(
-            contentDescription = "取消编辑",
-            onClick = onCancel,
-            size = 28.dp,
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(colors.surface3)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    role = Role.Button,
+                    onClickLabel = "取消编辑",
+                    onClick = onCancel,
+                ),
+            contentAlignment = Alignment.Center,
         ) {
             SvgIcon(
                 R.drawable.ic_close_outline_16,
-                tint = colors.textSecondary,
-                size = 13.dp,
+                tint = colors.textPrimary,
+                size = 16.dp,
             )
         }
     }
