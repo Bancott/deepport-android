@@ -3,6 +3,8 @@ package io.github.bancott.deepport.ui.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -142,6 +144,38 @@ fun ModelSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 28.dp),
         ) {
+            SectionLabel("供应商")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ProviderPresets.forEach { preset ->
+                    val active = store.provider == preset.id
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (active) colors.primary.copy(alpha = 0.16f) else colors.surface2)
+                            .clickable {
+                                if (preset.id == "custom") {
+                                    store.updateProvider("custom", store.baseUrl, "openai")
+                                } else {
+                                    store.updateProvider(preset.id, preset.baseUrl, preset.protocol)
+                                }
+                            }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            text = preset.label,
+                            style = DsText.label.copy(fontSize = 13.sp),
+                            color = if (active) colors.primary else colors.textSecondary,
+                        )
+                    }
+                }
+            }
+
             SectionLabel("接口")
             SettingsCard {
                 FieldRow(
@@ -375,3 +409,18 @@ private fun formatTokens(value: Int): String = when {
     value >= 1_000 -> "${value / 1_000}K"
     else -> value.toString()
 }
+
+/** 供应商预设：只预填 Base URL 与协议，Key/模型仍由用户自己填 */
+private data class ProviderPreset(
+    val id: String,
+    val label: String,
+    val baseUrl: String,
+    val protocol: String,
+)
+
+private val ProviderPresets = listOf(
+    ProviderPreset("deepseek", "DeepSeek", "https://api.deepseek.com", "anthropic"),
+    ProviderPreset("kimi", "Kimi", "https://api.moonshot.cn/v1", "openai"),
+    ProviderPreset("qwen", "通义千问", "https://dashscope.aliyuncs.com/compatible-mode/v1", "openai"),
+    ProviderPreset("custom", "自定义", "", "openai"),
+)
