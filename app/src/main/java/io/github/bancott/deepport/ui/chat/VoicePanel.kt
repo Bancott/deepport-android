@@ -131,11 +131,9 @@ private fun Waveform(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         repeat(BarCount) { index ->
+            // 直接用录音的实时 RMS，不再叠加中心加权和正弦装饰波
             val sample = levels.getOrNull(levels.size - BarCount + index) ?: 0f
-            val shape = 0.55f + 0.45f * (1f - abs(index - BarCount / 2f) / (BarCount / 2f))
-            val idle = 0.10f * sin(phase + index * 0.55f)
-            val amplitude = (sample * shape + idle).coerceIn(0f, 1f)
-            val barHeight = 3.dp + 11.dp * amplitude
+            val barHeight = 3.dp + 13.dp * sample.coerceIn(0f, 1f)
             androidx.compose.foundation.layout.Box(
                 Modifier
                     .width(2.dp)

@@ -432,9 +432,12 @@ private fun ConversationList(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            val shiftPx = with(LocalDensity.current) { titleShift.dp.toPx() }
                             Row(
                                 modifier = Modifier
-                                    .offset(x = titleShift.dp)
+                                    // 只做水平位移：offset 会参与布局，换成绘制期平移，
+                                    // 避免多选切换时标题出现向右上方的斜移
+                                    .graphicsLayer { translationX = shiftPx }
                                     .weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -461,27 +464,22 @@ private fun ConversationList(
                                     modifier = Modifier.weight(1f),
                                 )
                             }
-                            // 三点：点它和长按一样进二级菜单；多选模式下仅作摆设（行点击=切换选中）。
-                            // 官方没有圆形波纹反馈，这里去掉 indication（否则会闪一下灰色圆）。
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .clickable(
-                                        enabled = !multiSelect,
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                        role = Role.Button,
-                                    ) { menuTarget = conversation },
-                                contentAlignment = Alignment.CenterEnd,
-                            ) {
-                                ThreeDots(
-                                    color = if (isCurrent && !multiSelect) {
-                                        colors.primary
-                                    } else {
-                                        colors.textTertiary
-                                    },
-                                )
+                            // 三点只在当前会话显示；其他会话的菜单走长按，
+                            // 底部账户行的三点保持常驻（不在这一段里）。
+                            if (isCurrent && !multiSelect) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            role = Role.Button,
+                                        ) { menuTarget = conversation },
+                                    contentAlignment = Alignment.CenterEnd,
+                                ) {
+                                    ThreeDots(color = colors.primary)
+                                }
                             }
                         }
                     }

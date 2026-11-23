@@ -285,7 +285,7 @@ fun ChatScreen(
                             expanded = true,
                             onExpandedChange = { if (!it) userMenu = null },
                             anchorX = anchorX,
-                            anchorY = if (anchorY > 48.dp) anchorY - 48.dp else 0.dp,
+                            anchorY = anchorY,
                             onRegenerate = {
                                 userMenu = null
                                 onRegenerate(msg)

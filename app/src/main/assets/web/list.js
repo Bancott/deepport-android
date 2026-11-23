@@ -448,9 +448,9 @@
         var id = bubble.getAttribute('data-id')
         timer = setTimeout(function () {
           timer = null
-          var r = bubble.getBoundingClientRect()
+          // 菜单贴着手指落点弹（而不是固定贴气泡顶部）
           if (window.AndroidHost && window.AndroidHost.userMessageMenu) {
-            window.AndroidHost.userMessageMenu(id, r.left + r.width / 2, r.top)
+            window.AndroidHost.userMessageMenu(id, downX, downY)
           }
         }, 480)
       },

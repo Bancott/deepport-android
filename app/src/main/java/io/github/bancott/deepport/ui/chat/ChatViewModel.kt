@@ -424,6 +424,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(
                 input = it.input.copy(
                     text = merged,
+                    mode = InputMode.Text,
                     transcribing = false,
                     transcribedNotice = "🎙 已转为文字，可编辑",
                 ),
