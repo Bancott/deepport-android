@@ -114,7 +114,8 @@ fun DsInputBar(
             .padding(horizontal = DsDimen.InputHorizontalPadding),
         shape = RoundedCornerShape(DsDimen.InputCornerRadius),
         color = colors.surface1,
-        border = BorderStroke(1.dp, colors.outline),
+        // 编辑态：头部块本身贴住上边界，不画 1dp 描边，避免描边在块与卡片之间看起来像一条缝
+        border = if (editing) null else BorderStroke(1.dp, colors.outline),
     ) {
     Column {
     // 「修改并创建分支」在输入卡内部，贴着卡片上边界（不额外留白）
