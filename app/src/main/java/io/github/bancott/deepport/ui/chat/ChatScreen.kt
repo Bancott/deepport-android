@@ -75,6 +75,8 @@ fun ChatScreen(
     drawerOpen: Boolean = false,
     onNewChatClick: () -> Unit = {},
     onToggleSpeechOutput: () -> Unit = {},
+    /** 朗读中再点顶栏按钮：立即停止朗读 */
+    onStopSpeaking: () -> Unit = {},
     onTextChange: (String) -> Unit = {},
     onToggleDeepThinking: () -> Unit = {},
     onToggleSmartSearch: () -> Unit = {},
@@ -96,7 +98,7 @@ fun ChatScreen(
     onCopyMessage: (MessageUi) -> Unit = {},
     onSpeakMessage: (MessageUi) -> Unit = {},
     /// 选区朗读：系统选择工具栏里的「朗读」，走 App 内置 TTS
-    onSpeakSelection: (String) -> Unit = {},
+    onSpeakSelection: (String, String?) -> Unit = { _, _ -> },
     /** 网页里右滑（代码块已到最左端时）请求打开历史 */
     /** 消息区手势与顶栏共用同一份进度 */
     drawerProgress: androidx.compose.runtime.MutableFloatState? = null,
@@ -110,6 +112,8 @@ fun ChatScreen(
     clearSelectionTick: Int = 0,
     onShareMessage: (MessageUi) -> Unit = {},
     onRegenerate: (MessageUi) -> Unit = {},
+    /** 终止后「继续生成」：从停止处接着写 */
+    onContinueMessage: (MessageUi) -> Unit = {},
     onRetryMessage: (MessageUi) -> Unit = {},
     onEditMessage: (MessageUi) -> Unit = {},
     onOpenSource: (String) -> Unit = {},
@@ -125,6 +129,15 @@ fun ChatScreen(
     val imeBottomPx = WindowInsets.ime.getBottom(density)
     val disclaimerBlockPx = with(density) { DisclaimerBlockHeight.toPx() }
 
+    // 居中的轻提示（新对话重复点击 / 朗读开关）
+    var toastText by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(toastText) {
+        if (toastText != null) {
+            delay(1600)
+            toastText = null
+        }
+    }
+    var scrollToTopTick by remember { mutableIntStateOf(0) }
     // 附件面板：点「+」展开，键盘弹起 / 发出消息后自动收起
     var attachOpen by remember { mutableStateOf(false) }
     var sourcesSheet by remember { mutableStateOf<List<SourceItem>?>(null) }
@@ -184,6 +197,7 @@ fun ChatScreen(
                 title = state.title,
                 onMenuClick = onMenuClick,
                 menuDescription = menuDescription,
+                onTitleDoubleTap = { scrollToTopTick++ },
             ) {
                 // 顶栏朗读按钮：朗读中显示喇叭 + 两道声波呼吸（与消息动作条同一套节奏），
                 // 空闲时仍是官方三态喇叭图标。
@@ -191,15 +205,22 @@ fun ChatScreen(
                 val speechOn = state.isSpeechOutputOn
                 CircleIconButton(
                     contentDescription = if (speechOn) "关闭自动朗读" else "开启自动朗读",
-                    onClick = onToggleSpeechOutput,
+                    onClick = {
+                        if (reading) {
+                            // 朗读中：一次点击就停，而不是先切开关
+                            onStopSpeaking()
+                        } else {
+                            onToggleSpeechOutput()
+                            toastText = if (speechOn) "已关闭自动阅读" else "已开启自动阅读"
+                        }
+                    },
                 ) {
                     if (reading) {
                         SpeakerWaveGlyph(color = colors.primary, iconSize = 24.dp)
                     } else {
-                        SpeakerGlyph(
+                        io.github.bancott.deepport.ui.common.SpeakerToggleGlyph(
                             color = colors.textPrimary,
-                            muted = !speechOn,
-                            reading = false,
+                            enabled = speechOn,
                             iconSize = 24.dp,
                         )
                     }
@@ -207,7 +228,9 @@ fun ChatScreen(
                 Spacer(Modifier.width(8.dp))
                 CircleIconButton(
                     contentDescription = "新建对话",
-                    onClick = onNewChatClick,
+                    onClick = {
+                        if (state.isEmpty) toastText = "已经在新对话中" else onNewChatClick()
+                    },
                 ) {
                     NewChatGlyph(colors.textPrimary, iconSize = 24.dp)
                 }
@@ -233,8 +256,11 @@ fun ChatScreen(
                         clearSelectionTick = clearSelectionTick,
                         readingMessageId = state.readingMessageId,
                         onSpeakSelection = onSpeakSelection,
+                        generating = state.isGenerating,
+                        scrollToTopTick = scrollToTopTick,
                         onMessageAction = { m, action ->
                             when (action) {
+                                "continue" -> onContinueMessage(m)
                                 "copy" -> onCopyMessage(m)
                                 "speak" -> onSpeakMessage(m)
                                 "share" -> onShareMessage(m)
@@ -352,7 +378,7 @@ fun ChatScreen(
                 Text(
                     text = "回答由 AI 生成，仅供参考",
                     style = DsText.meta.copy(fontSize = 12.sp),
-                    color = colors.textTertiary,
+                    color = if (state.isEmpty) androidx.compose.ui.graphics.Color.Transparent else colors.textTertiary,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = DisclaimerBlockTopPadding, bottom = DisclaimerBlockBottomPadding),
@@ -364,6 +390,22 @@ fun ChatScreen(
         // 按住说话：整屏泛光 + 提示 + 波形（盖在最上层；纯绘制，不拦触摸）
         if (voiceRecording) {
             VoiceOverlay(cancel = voiceCancel, levels = voiceLevels)
+        }
+
+        toastText?.let { text ->
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = text,
+                    style = DsText.bodyTight,
+                    color = colors.textPrimary,
+                    modifier = Modifier
+                        .background(colors.surface2, androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                )
+            }
         }
 
         sourcesSheet?.let { list ->

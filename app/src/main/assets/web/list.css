@@ -260,3 +260,88 @@ html, body.list-page {
 .msg .actions .retry { margin-left: auto; }
 
 .msg .hint { margin-top: 8px; font-size: 0.8125rem; color: var(--fg2); }
+
+
+/* 终止后「继续生成」：正文下一行单独一枚描边胶囊 */
+.continue-row { display: flex; justify-content: flex-end; margin-top: 10px; }
+.continue-btn {
+  border: 1px solid var(--outline, #3a3a3c);
+  background: transparent;
+  color: var(--fg);
+  font-size: 0.875rem;
+  line-height: 20px;
+  padding: 7px 14px;
+  border-radius: 999px;
+}
+.continue-btn:active { opacity: .7; }
+
+/* 用户提示词气泡下方的分支切换 */
+.msg.user .user-branch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-right: 2px;
+  font-size: 0.8125rem;
+  color: var(--fg2);
+  white-space: nowrap;
+}
+.msg.user .user-branch .chev {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.msg.user .user-branch .chev svg { width: 16px; height: 16px; display: block; }
+.msg.user .user-branch .chev.disabled { opacity: .3; }
+
+/* 右侧滚动指示条：只在滑动时短暂出现 */
+.scroll-thumb {
+  position: fixed;
+  right: 2px;
+  top: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--fg2);
+  opacity: 0;
+  transition: opacity .18s ease;
+  pointer-events: none;
+  z-index: 20;
+}
+.scroll-thumb.visible { opacity: .35; }
+
+/* 回到底部：消息区右侧上方，生成中带旋转蓝环 */
+.jump-bottom {
+  position: fixed;
+  right: 14px;
+  bottom: 18px;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface2, #2c2c2e);
+  color: var(--fg2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(.9);
+  pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease;
+  z-index: 21;
+}
+.jump-bottom.show { opacity: 1; transform: scale(1); pointer-events: auto; }
+.jump-bottom .jump-arrow { width: 20px; height: 20px; }
+.jump-bottom .jump-ring { display: none; }
+.jump-bottom.generating .jump-ring {
+  display: block;
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--link, #4d6bfe);
+  animation: jump-spin .9s linear infinite;
+}
+@keyframes jump-spin { to { transform: rotate(360deg); } }

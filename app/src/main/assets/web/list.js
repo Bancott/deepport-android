@@ -2,6 +2,7 @@
 (function () {
   var messages = []
   var stickToBottom = true
+  var generating = false
 
   /** 官方 ReadingBars 的单根条：height/y 同一套 spline、同一个 begin，逐帧严格同步。
       官方是 2 宽 / 2 间距，这里收细到 1.8 / 2.2，配合 18px 画框更精致 */
@@ -59,7 +60,12 @@
 
   function reasoningHtml(m) {
     if (!m.reasoning && m.status !== 'reasoning') return ''
-    var head = m.status === 'reasoning' ? '正在思考' : '已思考（用时 ' + (m.reasoningSeconds || 1) + ' 秒）'
+    var head =
+      m.status === 'reasoning'
+        ? '正在思考'
+        : m.status === 'aborted'
+          ? '已停止'
+          : '已思考（用时 ' + (m.reasoningSeconds || 1) + ' 秒）'
     return (
       '<div class="reasoning">' +
       '<div class="reasoning-head ' + (m.reasoningExpanded ? 'open' : '') + '">' +
@@ -165,7 +171,19 @@
   function renderMessage(m, sessionTokens) {
     var id = escapeHtml(m.id)
     if (m.role === 'user') {
-      return '<div class="msg user" data-id="' + id + '"><div class="bubble">' + escapeHtml(m.text) + '</div></div>'
+      var userBranch = ''
+      if (m.branchCount > 1) {
+        userBranch =
+          '<div class="user-branch">' +
+          '<span class="chev' + (m.branchIndex <= 1 ? ' disabled' : '') + '" data-action="branch-prev">' + ICONS.left + '</span>' +
+          '<span>' + m.branchIndex + '/' + m.branchCount + '</span>' +
+          '<span class="chev' + (m.branchIndex >= m.branchCount ? ' disabled' : '') + '" data-action="branch-next">' + ICONS.right + '</span>' +
+          '</div>'
+      }
+      return (
+        '<div class="msg user" data-id="' + id + '"><div class="bubble">' + escapeHtml(m.text) + '</div>' +
+        userBranch + '</div>'
+      )
     }
     var streaming = m.status === 'streaming' || m.status === 'reasoning'
     var body = ''
@@ -176,9 +194,14 @@
     }
     var sources = sourcesHtml(m)
     var hint = ''
-    if (m.status === 'aborted') hint = '<div class="hint">已停止生成</div>'
     if (m.status === 'completed' && m.finishReason === 'length') {
       hint = '<div class="hint">回答达到长度上限，已截断</div>'
+    }
+    // 终止后：正文下一行单独放「继续生成」
+    var continueRow = ''
+    if (m.status === 'aborted') {
+      continueRow =
+        '<div class="continue-row"><button type="button" class="continue-btn" data-action="continue">继续生成</button></div>'
     }
     return (
       '<div class="msg assistant' + (streaming ? ' streaming' : '') + '" data-id="' + id + '">' +
@@ -186,6 +209,7 @@
       '<div class="body">' + body + '</div>' +
       sources +
       hint +
+      continueRow +
       (m.status === 'completed' || m.status === 'aborted' ? actionsHtml(m, sessionTokens) : '') +
       '</div>'
     )
@@ -260,6 +284,7 @@
     pendingToggleId = ''
     if (stickToBottom && !suppressStickOnce) list.scrollTop = list.scrollHeight
     suppressStickOnce = false
+    updateOverlays()
     // 增量替换会丢 class，重渲染后把朗读态补回去
     if (window.__readingId) window.setReadingMessage(window.__readingId)
     if (window.AndroidHost && window.AndroidHost.onContentChanged) window.AndroidHost.onContentChanged()
@@ -301,12 +326,19 @@
       // 首帧就按当前档位排：否则会先按 16px 画一遍再跳大，能看见一次抖动
       applyFontScale(payload.fs)
       messages = payload.messages || []
+      generating = !!payload.generating
       document.getElementById('list').dataset.sessionTokens = String(payload.sessionTokens || 0)
     } catch (e) {
       console.error('setMessages parse failed: ' + e)
       messages = []
     }
     render()
+  }
+
+  window.scrollToTop = function () {
+    var list = document.getElementById('list')
+    list.scrollTop = 0
+    stickToBottom = false
   }
 
   window.scrollToBottom = function () {
@@ -443,20 +475,21 @@
   // 选区朗读：从选区起点读到这条消息结尾（系统菜单「朗读」用）
   window.__selectionTail = function () {
     var sel = window.getSelection && window.getSelection()
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return ''
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return { text: '', id: '' }
     var range = sel.getRangeAt(0)
     var start = range.startContainer
     var el = start && start.nodeType === 1 ? start : start && start.parentElement
     var msg = el && el.closest ? el.closest('.msg') : null
-    if (!msg) return sel.toString()
+    var mid = msg ? msg.getAttribute('data-id') : ''
+    if (!msg) return { text: sel.toString(), id: '' }
     var full = msg.querySelector('.body') || msg.querySelector('.bubble') || msg
     try {
       var tail = document.createRange()
       tail.setStart(range.startContainer, range.startOffset)
       tail.setEnd(full, full.childNodes.length)
-      return tail.toString()
+      return { text: tail.toString(), id: mid }
     } catch (err) {
-      return sel.toString()
+      return { text: sel.toString(), id: mid }
     }
   }
 
@@ -472,7 +505,63 @@
     if (sel && sel.removeAllRanges) sel.removeAllRanges()
   }
 
-  // 朗读状态：原生驱动，给对应消息的喇叭图标加上 .speaking（波形动效）
+
+  // ——— 右侧滚动指示条 + 回到底部按钮 ———
+  var hideScrollbarTimer = 0
+  function ensureOverlays() {
+    var list = document.getElementById('list')
+    if (!list || document.getElementById('scrollThumb')) return
+    var thumb = document.createElement('div')
+    thumb.id = 'scrollThumb'
+    thumb.className = 'scroll-thumb'
+    var jump = document.createElement('button')
+    jump.id = 'jumpBottom'
+    jump.className = 'jump-bottom'
+    jump.type = 'button'
+    jump.setAttribute('aria-label', '回到底部')
+    jump.innerHTML =
+      '<svg class="jump-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' +
+      '<path d="M12 4v14"/><path d="M6 12l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '<span class="jump-ring"></span>'
+    jump.addEventListener('click', function () { window.scrollToBottom() })
+    document.body.appendChild(thumb)
+    document.body.appendChild(jump)
+  }
+
+  function updateOverlays() {
+    ensureOverlays()
+    var list = document.getElementById('list')
+    var thumb = document.getElementById('scrollThumb')
+    var jump = document.getElementById('jumpBottom')
+    if (!list || !thumb || !jump) return
+    var max = list.scrollHeight - list.clientHeight
+    var overscroll = max > 24
+    // 滚动指示条：只在能滚动时显示，长度按视口/内容比例
+    if (overscroll) {
+      var ratio = list.clientHeight / list.scrollHeight
+      var h = Math.max(24, Math.round(list.clientHeight * ratio))
+      var top = Math.round((list.scrollTop / max) * (list.clientHeight - h))
+      thumb.style.height = h + 'px'
+      thumb.style.transform = 'translateY(' + top + 'px)'
+    }
+    // 回到底部：不在底部时出现（含生成中内容超出的情况）
+    var atBottom = max - list.scrollTop < 24
+    jump.classList.toggle('show', overscroll && !atBottom)
+    jump.classList.toggle('generating', generating)
+    // 刚渲染完不显示滚动条，等用户真的滑动再显示
+    if (!thumb.classList.contains('visible')) thumb.style.opacity = '0'
+  }
+
+  function flashScrollbar() {
+    var thumb = document.getElementById('scrollThumb')
+    if (!thumb) return
+    thumb.classList.add('visible')
+    clearTimeout(hideScrollbarTimer)
+    hideScrollbarTimer = setTimeout(function () {
+      thumb.classList.remove('visible')
+    }, 1200)
+  }
+
   window.setReadingMessage = function (id) {
     window.__readingId = id || ''
     var list = document.getElementById('list')
@@ -492,6 +581,8 @@
     installMessageInteractions(list)
     list.addEventListener('scroll', function () {
       stickToBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 24
+      updateOverlays()
+      flashScrollbar()
     })
     // 思考折叠：本地先切，再把状态同步给原生
     list.addEventListener('click', function (e) {

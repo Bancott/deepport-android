@@ -35,8 +35,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -261,13 +265,15 @@ private fun InputTextField(
     onTextChange: (String) -> Unit,
 ) {
     val colors = DsTheme.colors
+    var focused by remember { mutableStateOf(false) }
     BasicTextField(
         value = text,
-        onValueChange = onTextChange,
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 26.dp)
-            .padding(start = 6.dp),
+            .padding(start = 6.dp)
+            .onFocusChanged { focused = it.isFocused },
+        onValueChange = onTextChange,
         textStyle = DsText.bodyTight.copy(color = colors.textPrimary),
         cursorBrush = SolidColor(colors.primary),
         maxLines = 5,
@@ -275,7 +281,7 @@ private fun InputTextField(
             Box {
                 if (text.isEmpty()) {
                     Text(
-                        text = "发消息或按住说话",
+                        text = if (focused) "发消息" else "发消息或按住说话",
                         style = DsText.bodyTight,
                         color = colors.textTertiary,
                     )

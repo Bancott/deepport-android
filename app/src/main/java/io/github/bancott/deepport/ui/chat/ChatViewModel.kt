@@ -300,8 +300,15 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
     fun speakMessage(message: MessageUi): Boolean =
         startSpeaking(TtsPlayer.plainText(message.text), message.id)
 
-    /** 朗读系统选区里的文字：走同一套 App 内置 TTS（不是系统 TTS） */
-    fun speakSelection(raw: String): Boolean = startSpeaking(TtsPlayer.plainText(raw), null)
+    /** 朗读系统选区里的文字：走同一套 App 内置 TTS（不是系统 TTS）。
+     *  带上所属消息 id，动作条的朗读按钮才能同步切成"朗读中"的波形。 */
+    fun speakSelection(raw: String, messageId: String? = null): Boolean =
+        startSpeaking(TtsPlayer.plainText(raw), messageId)
+
+    /** 顶栏朗读按钮：朗读中再点一次立即停止 */
+    fun stopSpeaking() {
+        tts.stop()
+    }
 
     /**
      * 动作条的喇叭：朗读这一条回答；没有正文时返回 false 让 UI 给个提示。
@@ -624,6 +631,24 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         startStream(message.id, parentKey)
     }
 
+    /** 终止后「继续生成」：把已生成的部分作为 assistant 前缀，接着往下写并追加 */
+    fun continueMessage(message: MessageUi) {
+        val current = _state.value
+        if (current.isGenerating) return
+        if (message.role != ChatRole.Assistant) return
+        val node = nodes[message.id] ?: return
+        if (node.text.isBlank()) return
+        nodes[message.id] = node.copy(
+            status = MessageStatus.Connecting,
+            errorHint = null,
+            finishReason = null,
+        )
+        _state.update {
+            it.copy(generation = GenerationState.Connecting, messages = activePath())
+        }
+        startStream(message.id, message.parentId.orEmpty(), resume = node)
+    }
+
     /** 分支切换：±1 在同父节点的兄弟之间移动，到头即停 */
     fun selectBranch(message: MessageUi, delta: Int) {
         val siblings = childrenOf(message.parentId)
@@ -645,7 +670,7 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
 
     /* ----------------------------- 流式请求 ----------------------------- */
 
-    private fun startStream(assistantId: String, parentKey: String) {
+    private fun startStream(assistantId: String, parentKey: String, resume: MessageUi? = null) {
         // 新一轮生成开始，先停掉上一条正在朗读的声音
         tts.stop()
         val apiKey = settings.apiKey
@@ -671,7 +696,20 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
                 fail(assistantId, e.message ?: "附件上传失败，请检查网络后重试")
                 return@launch
             }
-            streamInto(assistantId, messages, thinking, enableSearch, requestTitle)
+            val withPrefix = if (resume != null && resume.text.isNotBlank()) {
+                messages + ApiMessage(role = "assistant", text = resume.text)
+            } else {
+                messages
+            }
+            streamInto(
+                assistantId,
+                withPrefix,
+                thinking,
+                enableSearch,
+                requestTitle,
+                resumeText = resume?.text.orEmpty(),
+                resumeReasoning = resume?.reasoning.orEmpty(),
+            )
         }
     }
 
@@ -720,10 +758,12 @@ class ChatViewModel(app: Application) : AndroidViewModel(app) {
         thinking: Boolean,
         enableSearch: Boolean,
         requestTitle: Boolean,
+        resumeText: String = "",
+        resumeReasoning: String = "",
     ) {
         val startedAt = System.currentTimeMillis()
-        val reasoning = StringBuilder()
-        val content = StringBuilder()
+        val reasoning = StringBuilder(resumeReasoning)
+        val content = StringBuilder(resumeText)
         var lastFlush = 0L
         var firstContentAt = 0L
         var usage: TokenUsage? = null

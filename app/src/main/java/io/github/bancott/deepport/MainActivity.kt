@@ -625,8 +625,8 @@ private fun App(isDark: Boolean) {
                     clipboard.setPrimaryClip(ClipData.newPlainText("message", message.text))
                     Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
                 },
-                onSpeakSelection = { text ->
-                    if (vm.speakSelection(text)) pendingSelectionClear = true
+                onSpeakSelection = { text, messageId ->
+                    if (vm.speakSelection(text, messageId)) pendingSelectionClear = true
                 },
                 clearSelectionTick = selectionClearTick,
                 drawerProgress = drawerProgress,

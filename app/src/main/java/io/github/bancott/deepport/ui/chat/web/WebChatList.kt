@@ -74,12 +74,16 @@ fun WebChatList(
     onMessageAction: (MessageUi, String) -> Unit = { _, _ -> },
     /** 用户气泡长按：坐标为网页 CSS px（相对消息区左上角） */
     onUserMessageMenu: (MessageUi, Float, Float) -> Unit = { _, _, _ -> },
-    /** 系统选择菜单里的「朗读」：从选区起点读到消息结尾 */
-    onSpeakSelection: (String) -> Unit = {},
+    /** 系统选择菜单里的「朗读」：从选区起点读到消息结尾（第二个参数是所属消息 id） */
+    onSpeakSelection: (String, String?) -> Unit = { _, _ -> },
     /** 自增一次 = 清掉网页里的选区（朗读读完时用） */
     clearSelectionTick: Int = 0,
     /** 正在朗读的消息 id：网页据此给喇叭加波形动效 */
     readingMessageId: String? = null,
+    /** 是否正在生成：网页用它给「回到底部」按钮加转圈 */
+    generating: Boolean = false,
+    /** 自增一次 = 滚回对话顶部（双击标题） */
+    scrollToTopTick: Int = 0,
 ) {
     val colors = DsTheme.colors
     // 就绪状态由 WebView 自己持久记录（不是一次性的 onReady 事件）：
@@ -101,7 +105,7 @@ fun WebChatList(
         gesture.isOpen = drawerOpen
         gesture.onSettle = onSettle
         gesture.onDragStart = onDragStart
-        gesture.onSpeakSelection = { text -> speakNow.value(text) }
+        gesture.onSpeakSelection = { text, id -> speakNow.value(text, id) }
 
         // 复用池里的 WebView 是单例，JS 接口只认 host，所以每次组合都把最新回调写进去
         val webHost = ChatWeb.host
@@ -178,7 +182,10 @@ fun WebChatList(
             )
         }
         JSONObject().put("messages", arr).put("sessionTokens", sessionTokens)
-            .put("fs", fontScale.toDouble()).toString()
+            .put("fs", fontScale.toDouble())
+            .put("generating", generating)
+            .put("readingId", readingMessageId ?: "")
+            .toString()
     }
 
     AndroidView(
@@ -238,6 +245,11 @@ fun WebChatList(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    LaunchedEffect(webView, scrollToTopTick) {
+        if (scrollToTopTick > 0) {
+            webView?.evaluateJavascript("window.scrollToTop && window.scrollToTop()", null)
+        }
+    }
     LaunchedEffect(webView, clearSelectionTick) {
         if (clearSelectionTick > 0) {
             webView?.evaluateJavascript("window.clearSelection && window.clearSelection()", null)
@@ -263,7 +275,7 @@ internal class GestureBridge {
     var onDragStart: () -> Unit = {}
 
     @Volatile
-    var onSpeakSelection: (String) -> Unit = {}
+    var onSpeakSelection: (String, String?) -> Unit = { _, _ -> }
 
     // 选区矩形（view 坐标，px）：Chromium 的 onGetContentRect 拿不到时当兜底
     @Volatile
@@ -457,8 +469,17 @@ internal class MessageWebView(context: Context) : WebView(context) {
     /** 取「选区起点 → 本条消息结尾」的文字交给 App 内置 TTS */
     private fun speakSelectionTail() {
         evaluateJavascript("window.__selectionTail ? window.__selectionTail() : ''") { raw ->
-            val text = (JSONTokener(raw).nextValue() as? String).orEmpty()
-            if (text.isNotBlank()) bridge.onSpeakSelection(text)
+            val value = JSONTokener(raw).nextValue()
+            val text: String
+            val messageId: String?
+            if (value is JSONObject) {
+                text = value.optString("text")
+                messageId = value.optString("id").ifBlank { null }
+            } else {
+                text = value as? String ?: ""
+                messageId = null
+            }
+            if (text.isNotBlank()) bridge.onSpeakSelection(text, messageId)
         }
     }
 
