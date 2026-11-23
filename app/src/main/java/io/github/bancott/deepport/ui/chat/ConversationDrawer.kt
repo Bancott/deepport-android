@@ -136,26 +136,34 @@ fun ConversationDrawer(
             // 官方 2.8.0：头部在「搜索框 ↔ 多选头」之间做交叉淡入 + 尺寸补间（200ms, ease-in-out）；
             // 列表是同一个，行内 checkboxAlpha/titleShift 两个 200ms 动画随多选模式整体切换。
             val headerEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
-            AnimatedContent(
-                targetState = state.multiSelect,
-                transitionSpec = {
-                    val spec = tween<Float>(200, easing = headerEasing)
-                    (fadeIn(spec) togetherWith fadeOut(spec)) using SizeTransform(
-                        clip = false,
-                        sizeAnimationSpec = { _, _ -> tween(200, easing = headerEasing) },
-                    )
-                },
-                label = "DrawerHeaderTransition",
-            ) { multiSelect ->
-                Column {
-                    if (multiSelect) {
-                        MultiSelectHeader(
-                            onClose = onExitMultiSelect,
-                            selectedCount = state.selectedCount,
-                        )
-                    } else {
-                        Spacer(Modifier.height(8.dp))
-                        SearchField(onClick = onSearchClick)
+            // 头部容器固定 50dp：多选头与普通头同高，且不再让 AnimatedContent 做尺寸补间，
+            // 切换时列表的顶部永远不动，标题只剩水平位移。
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+            ) {
+                AnimatedContent(
+                    targetState = state.multiSelect,
+                    transitionSpec = {
+                        val spec = tween<Float>(200, easing = headerEasing)
+                        fadeIn(spec) togetherWith fadeOut(spec)
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    label = "DrawerHeaderTransition",
+                ) { multiSelect ->
+                    Box(Modifier.fillMaxSize()) {
+                        if (multiSelect) {
+                            MultiSelectHeader(
+                                onClose = onExitMultiSelect,
+                                selectedCount = state.selectedCount,
+                            )
+                        } else {
+                            Column(Modifier.fillMaxSize()) {
+                                Spacer(Modifier.height(8.dp))
+                                SearchField(onClick = onSearchClick)
+                            }
+                        }
                     }
                 }
             }

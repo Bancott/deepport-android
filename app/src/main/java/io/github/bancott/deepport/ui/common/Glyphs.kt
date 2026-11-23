@@ -20,7 +20,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asComposePath
@@ -241,11 +243,11 @@ fun SvgIcon(
 
 
 /**
- * 顶栏朗读开关：官方喇叭图标 + 一条自绘斜线。
+ * 顶栏朗读开关：官方播放图标的「喇叭本体 + 声波」拆成两张 vector，
+ * 关闭时声波淡出、斜线从左上往右下长出来；开启时反过来。
  *
- * 斜线几何按官方 ic_mute_audio_outline_24 的位图量出来（24dp 画框，(7.2,7.2)→(18.4,19.2)，
- * 线宽 1.7dp、圆头）。不用直接切 mute 图标，而是让斜线长度随开关平滑伸缩：
- * 关闭时从左上向右下长到 1，开启时反向缩回 0。
+ * 斜线几何按官方 ic_mute_audio_outline_24 的位图量取：24dp 画框 (7.2,7.2)→(18.4,19.2)、线宽 1.7dp、圆头。
+ * 这样图标本身就是官方的矢量轮廓，不是另画一套。
  */
 @Composable
 fun SpeakerToggleGlyph(
@@ -260,7 +262,13 @@ fun SpeakerToggleGlyph(
         label = "speaker-slash",
     )
     Box(modifier = modifier.size(iconSize)) {
-        SvgIcon(R.drawable.ic_play_media_outline_24, tint = color, size = iconSize)
+        SvgIcon(R.drawable.ic_speaker_body_24, tint = color, size = iconSize)
+        SvgIcon(
+            R.drawable.ic_speaker_waves_24,
+            tint = color,
+            size = iconSize,
+            modifier = Modifier.alpha(1f - progress),
+        )
         androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
             val unit = size.width / 24f
             val sx = 7.2f * unit
@@ -280,4 +288,5 @@ fun SpeakerToggleGlyph(
         }
     }
 }
+
 
