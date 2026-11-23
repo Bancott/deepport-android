@@ -63,6 +63,7 @@ import io.github.bancott.deepport.ui.chat.PushDrawerLayout
 import io.github.bancott.deepport.ui.chat.web.ChatWeb
 import io.github.bancott.deepport.ui.chat.ReadAloudState
 import io.github.bancott.deepport.ui.chat.RenameConversationDialog
+import io.github.bancott.deepport.ui.chat.SearchOverlay
 import io.github.bancott.deepport.ui.chat.SearchScreen
 import io.github.bancott.deepport.ui.chat.rememberVoiceInput
 import io.github.bancott.deepport.ui.web.WebScreen
@@ -209,6 +210,8 @@ private fun App(isDark: Boolean) {
         }
     }
     var drawer by remember { mutableStateOf(DrawerUiState()) }
+    // 抽屉内的搜索展开层：不换页，只把抽屉原地展开到全屏
+    var drawerSearchOpen by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<ConversationUi?>(null) }
     var deleteTarget by remember { mutableStateOf<ConversationUi?>(null) }
     var showAppearance by remember { mutableStateOf(false) }
@@ -574,22 +577,21 @@ private fun App(isDark: Boolean) {
             onAppearance = { showAppearance = true },
         )
 
-        Screen.Chat -> PushDrawerLayout(
+        Screen.Chat -> Box(Modifier.fillMaxSize()) {
+        PushDrawerLayout(
             drawerOpen = drawerOpen,
             onDrawerOpenChange = { setDrawerOpen(it) },
             externalProgress = drawerProgress,
             settleSignal = drawerSettleSignal,
             settleTarget = drawerSettleTarget,
             cancelAnimationSignal = drawerCancelAnimSignal,
+            // 搜索层盖在上面时关掉抽屉手势，避免滑动穿透改 progress
+            gesturesEnabled = !drawerSearchOpen,
             drawer = { modifier ->
                 ConversationDrawer(
                     state = drawer,
                     modifier = modifier,
-                    onSearchClick = {
-                        // 直接进搜索：不先收起抽屉，避免会话页先"闪一下全屏"再退场；
-                        // 整块会话页（含历史）随转场一起被顶开，返回走同一套反向动画。
-                        navPush(Screen.Search)
-                    },
+                    onSearchClick = { drawerSearchOpen = true },
                     onConversationClick = { conversation ->
                         vm.open(conversation.id)
                         setDrawerOpen(false)
@@ -708,6 +710,19 @@ private fun App(isDark: Boolean) {
                     } else {
                         Toast.makeText(context, "这条回答还没有可分享的正文", Toast.LENGTH_SHORT).show()
                     }
+                },
+            )
+        }
+
+            // 抽屉内搜索层：从抽屉宽度连续展开到全屏，不换页
+            SearchOverlay(
+                visible = drawerSearchOpen,
+                onClose = { drawerSearchOpen = false },
+                search = { vm.search(it) },
+                onOpenConversation = { id ->
+                    vm.open(id)
+                    drawerSearchOpen = false
+                    setDrawerOpen(false)
                 },
             )
         }

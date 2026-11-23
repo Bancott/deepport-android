@@ -1,5 +1,14 @@
 ﻿package io.github.bancott.deepport.ui.chat
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.CubicBezierEasing
@@ -133,38 +142,42 @@ fun ConversationDrawer(
                 // 底部让出系统手势条高度，避免账户名贴住小白条
                 .navigationBarsPadding(),
         ) {
-            // 官方 2.8.0：头部在「搜索框 ↔ 多选头」之间做交叉淡入 + 尺寸补间（200ms, ease-in-out）；
-            // 列表是同一个，行内 checkboxAlpha/titleShift 两个 200ms 动画随多选模式整体切换。
+            // 官方 2.8.0：头部在「搜索框 ↔ 多选头」之间做 200ms ease-in-out 交叉。
+            // 两个状态统一成「50dp 容器 + 42dp 内容 + 底部对齐」：容器高度和内容基线都固定，
+            // 切多选时标题不会上跳、列表顶部也不会动。
             val headerEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
-            // 头部容器固定 50dp：多选头与普通头同高，且不再让 AnimatedContent 做尺寸补间，
-            // 切换时列表的顶部永远不动，标题只剩水平位移。
+            // 交叉淡入不用 Crossfade：它会按内容的最大尺寸撑容器，切换瞬间容器高度一变，
+            // 里面的搜索框就会被带着上下移动（用户看到的"搜索栏上移"就是这个）。
+            // 改成两层都固定 42dp、都贴同一个 BottomStart 位置，只让 alpha 交叉 —— 垂直位置永远不动。
+            val multiAlpha by animateFloatAsState(
+                targetValue = if (state.multiSelect) 1f else 0f,
+                animationSpec = tween(200, easing = headerEasing),
+                label = "DrawerHeaderCross",
+            )
             Box(
                 Modifier
                     .fillMaxWidth()
                     .height(HeaderSlotHeight),
+                contentAlignment = Alignment.BottomStart,
             ) {
-                androidx.compose.animation.Crossfade(
-                    targetState = state.multiSelect,
-                    animationSpec = tween(200, easing = headerEasing),
-                    label = "DrawerHeaderTransition",
-                ) { multiSelect ->
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(HeaderSlotHeight),
-                    ) {
-                        if (multiSelect) {
-                            MultiSelectHeader(
-                                onClose = onExitMultiSelect,
-                                selectedCount = state.selectedCount,
-                            )
-                        } else {
-                            Column(Modifier.fillMaxWidth()) {
-                                Spacer(Modifier.height(8.dp))
-                                SearchField(onClick = onSearchClick)
-                            }
-                        }
-                    }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                        .graphicsLayer { alpha = 1f - multiAlpha },
+                ) {
+                    SearchField(onClick = onSearchClick, enabled = !state.multiSelect)
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                        .graphicsLayer { alpha = multiAlpha },
+                ) {
+                    MultiSelectHeader(
+                        onClose = onExitMultiSelect,
+                        selectedCount = state.selectedCount,
+                    )
                 }
             }
 
@@ -256,7 +269,7 @@ private fun ThreeDots(
 }
 
 @Composable
-private fun SearchField(onClick: () -> Unit) {
+private fun SearchField(onClick: () -> Unit, enabled: Boolean = true) {
     val colors = DsTheme.colors
     Row(
         modifier = Modifier
@@ -265,7 +278,7 @@ private fun SearchField(onClick: () -> Unit) {
             .height(42.dp)
             .clip(CircleShape)
             .background(colors.fieldBg)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -285,15 +298,157 @@ private fun SearchField(onClick: () -> Unit) {
     }
 }
 
+/** 抽屉头部三态：在同一 50dp 槽位里交叉淡入 */
+private enum class DrawerHead { Normal, Search, Multi }
+
+/**
+ * 搜索态头部：42dp 圆角输入框 + 「取消」。
+ * 与普通态同为「上留 8dp、高 42dp」，切换时输入框不会上下跳。
+ */
+@Composable
+private fun SearchHeader(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    focusRequester: FocusRequester,
+    onBack: () -> Unit,
+    onSearch: () -> Unit,
+) {
+    val colors = DsTheme.colors
+    // 与视频一致：点搜索框后头部原地变成「‹ + 输入框」，输入框左缘让出返回键的位置。
+    // 形态和搜索页顶栏同一套，不再用「取消」文字。
+    Column(Modifier.fillMaxWidth()) {
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 8.dp, end = 12.dp)
+                .height(42.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircleIconButton(
+                contentDescription = "退出搜索",
+                size = 32.dp,
+                onClick = onBack,
+            ) {
+                SvgIcon(
+                    R.drawable.ic_chevron_left_outline_20,
+                    tint = colors.textPrimary,
+                    size = 20.dp,
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(colors.fieldBg)
+                    .padding(start = 12.dp, end = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SvgIcon(
+                    R.drawable.ic_search_outline_16,
+                    tint = colors.textSecondary,
+                    size = 18.dp,
+                )
+                Spacer(Modifier.width(8.dp))
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = DsText.label.copy(color = colors.textPrimary),
+                    cursorBrush = SolidColor(colors.primary),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
+                    decorationBox = { inner ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (query.isEmpty()) {
+                                Text(
+                                    text = "搜索对话内容...",
+                                    style = DsText.label,
+                                    color = colors.textSecondary,
+                                )
+                            }
+                            inner()
+                        }
+                    },
+                )
+                if (query.isNotEmpty()) {
+                    CircleIconButton(
+                        contentDescription = "清除",
+                        size = 28.dp,
+                        onClick = { onQueryChange("") },
+                    ) {
+                        SvgIcon(
+                            R.drawable.ic_close_outline_16,
+                            tint = colors.textSecondary,
+                            size = 15.dp,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 搜索态列表：与搜索页同一套行样式（结果数 / 空态 / 命中高亮） */
+@Composable
+private fun SearchResults(
+    query: String,
+    search: (String) -> List<SearchHit>,
+    onOpen: (String) -> Unit,
+) {
+    val colors = DsTheme.colors
+    // 输入防抖 + 后台线程：loadAll() 每次都 runBlocking 查全表，
+    // 在组合里同步跑会把每个按键都卡在数据库查询上。
+    val hits by androidx.compose.runtime.produceState(emptyList<SearchHit>(), query) {
+        if (query.isBlank()) {
+            value = emptyList()
+            return@produceState
+        }
+        kotlinx.coroutines.delay(140)
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { search(query) }.getOrDefault(emptyList())
+        }
+    }
+    when {
+        query.isBlank() -> Hint("搜索对话标题或内容")
+        hits.isEmpty() -> Hint("未找到相关对话")
+        else -> LazyColumn(Modifier.fillMaxSize()) {
+            item(key = "count") {
+                Text(
+                    text = "${hits.size} 条结果",
+                    style = DsText.caption.copy(fontSize = 13.sp),
+                    color = colors.textSecondary,
+                    modifier = Modifier.padding(start = 20.dp, top = 10.dp, bottom = 6.dp),
+                )
+            }
+            items(hits, key = { it.conversationId }) { hit ->
+                SearchResultRow(
+                    hit = hit,
+                    query = query,
+                    onClick = { onOpen(hit.conversationId) },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun MultiSelectHeader(onClose: () -> Unit, selectedCount: Int) {
     val colors = DsTheme.colors
     // 与普通头（8 + 42 = 50dp）同高：切多选时列表不会上下移动，
     // 标题才能表现为纯水平位移
+    // 与普通态搜索框同一基线：50dp 槽里上留 8dp、内容 42dp，文字垂直中心落在 29dp，
+    // 和搜索框内文字完全同高。原来在 50dp 里居中（25dp），切多选时整块字往上跳 4dp。
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(50.dp)
+            .padding(top = 8.dp)
+            .height(42.dp)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -344,6 +499,10 @@ private fun ConversationList(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        // 行高锁死：分组头右侧那个 20dp 多选图标在不在，都不能改变这一行的高度。
+                        // 之前是 !multiSelect 时直接不组合图标，内容高度从 20dp 掉到文字高度，
+                        // 「今天」以下的整片列表会跟着上移 4dp —— 这才是"字体上移"的真凶。
+                        .heightIn(min = 44.dp)
                         .padding(start = 22.dp, end = TuneEnd, top = 18.dp, bottom = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -353,15 +512,23 @@ private fun ConversationList(
                         color = colors.textSecondary,
                         modifier = Modifier.weight(1f),
                     )
-                    if (!multiSelect && group.label == groups.firstOrNull()?.label) {
-                        SvgIcon(
-                            R.drawable.ic_checklist_outline_16,
-                            tint = colors.textSecondary,
-                            size = 20.dp,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable(role = Role.Button, onClick = onToggleMultiSelect),
-                        )
+                    if (group.label == groups.firstOrNull()?.label) {
+                        // 始终占 20dp：多选时只淡出、不摘布局，行高才恒定
+                        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                            SvgIcon(
+                                R.drawable.ic_checklist_outline_16,
+                                tint = colors.textSecondary,
+                                size = 20.dp,
+                                modifier = Modifier
+                                    .graphicsLayer { alpha = if (multiSelect) 0f else 1f }
+                                    .clip(CircleShape)
+                                    .clickable(
+                                        enabled = !multiSelect,
+                                        role = Role.Button,
+                                        onClick = onToggleMultiSelect,
+                                    ),
+                            )
+                        }
                     }
                 }
             }

@@ -29,6 +29,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import kotlinx.coroutines.launch
+import io.github.bancott.deepport.BuildConfig
+import io.github.bancott.deepport.data.UpdateChecker
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.bancott.deepport.R
@@ -62,6 +75,35 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = DsTheme.colors
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var updateRelease by remember { mutableStateOf<UpdateChecker.Release?>(null) }
+    var checking by remember { mutableStateOf(false) }
+    var updateFailed by remember { mutableStateOf(false) }
+
+    fun checkUpdate(manual: Boolean) {
+        if (checking) return
+        checking = true
+        updateFailed = false
+        scope.launch {
+            val result = UpdateChecker.latest()
+            checking = false
+            result.onSuccess { release ->
+                if (UpdateChecker.isNewer(release.version, BuildConfig.VERSION_NAME)) {
+                    updateRelease = release
+                } else if (manual) {
+                    android.widget.Toast.makeText(ctx, "已是最新版本", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure {
+                updateFailed = true
+                if (manual) {
+                    android.widget.Toast.makeText(ctx, "检查更新失败，请检查网络", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) { checkUpdate(false) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -131,11 +173,67 @@ fun SettingsScreen(
 
             SectionLabel("关于")
             SettingsGroup {
-                SettingsRow(Icons.Outlined.Info, "关于 DeepPort", onClick = onAbout)
+                SettingsRow(
+                    Icons.Outlined.Info,
+                    "关于 DeepPort",
+                    value = "v${BuildConfig.VERSION_NAME}",
+                    onClick = onAbout,
+                )
+                SettingsRow(
+                    R.drawable.ic_download_outline_20,
+                    "检查更新",
+                    value = when {
+                        checking -> "检查中…"
+                        updateRelease != null -> "发现 v${updateRelease?.version.orEmpty()}"
+                        updateFailed -> "检查失败"
+                        else -> "已是最新"
+                    },
+                    onClick = { checkUpdate(true) },
+                )
             }
 
             // 退出登录仍不显示：这个壳没有官方账号会话，放一个按了没反应的入口比没有更糟。
         }
+    }
+
+    updateRelease?.let { release ->
+        AlertDialog(
+            onDismissRequest = { updateRelease = null },
+            title = { Text("发现新版本 v${release.version}", color = colors.textPrimary) },
+            text = {
+                Text(
+                    text = release.notes.ifBlank { "新版本已发布，建议下载更新。" }.take(400),
+                    color = colors.textSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        runCatching {
+                            ctx.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(
+                                        release.url.ifBlank {
+                                            "https://github.com/Bancott/deepport-android/releases/latest"
+                                        },
+                                    ),
+                                ),
+                            )
+                        }
+                        updateRelease = null
+                    },
+                ) {
+                    Text("去下载", color = colors.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { updateRelease = null }) {
+                    Text("稍后", color = colors.textSecondary)
+                }
+            },
+            containerColor = colors.dialog,
+        )
     }
 }
 

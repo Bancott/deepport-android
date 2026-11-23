@@ -1,5 +1,8 @@
 ﻿package io.github.bancott.deepport.ui.chat
 
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -69,27 +72,40 @@ fun SearchScreen(
     val colors = DsTheme.colors
     var query by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
-    // 进场：搜索栏从左侧短一点的位置，边右移边变长到全宽
+    // 进场对齐官方头部切换（2.8.0 录屏：200ms ease-in-out 的交叉淡入）：
+    // 搜索框**不**做宽度拉伸、也不做水平位移，只在原位淡入。上一版 0.86→1 + -28dp
+    // 会让搜索栏先窄后宽再右移，比整页转场还抢眼；视频里「搜索框 ↔ 选择对话」
+    // 是同一位置的内容交叉，没有任何「长出来」的动作。
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
-    val grow by androidx.compose.animation.core.animateFloatAsState(
+    val appear by animateFloatAsState(
         targetValue = if (entered) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(280),
-        label = "searchBarGrow",
+        animationSpec = tween(
+            durationMillis = 200,
+            easing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f),
+        ),
+        label = "searchAppear",
     )
     val keyboard = LocalSoftwareKeyboardController.current
-    // 等转场结束再聚焦：键盘一弹会改变可用高度，转场中重排就是"闪一下"的来源
+    // 键盘稍晚于内容淡入（200ms + 一帧余量），转场中弹键盘会把内容顶一下
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(320)
+        kotlinx.coroutines.delay(240)
         runCatching { focus.requestFocus() }
     }
 
     val hits = remember(query) { if (query.isBlank()) emptyList() else search(query) }
 
-    Column(
+    // 背景先铺满（随整页 fadeIn 快速到位，避免两页叠影），内容整体 200ms 淡入：
+    // 观感是「列表原地换成搜索内容」，而不是整块页面飞进来。
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.bg)
+            .background(colors.bg),
+    ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { alpha = appear }
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
@@ -97,13 +113,7 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
-                .padding(start = 8.dp, end = 12.dp)
-                // 以左端为锚点：宽度 86%→100%，同时整体右移，看起来像被搜索栏顶开
-                .graphicsLayer {
-                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
-                    scaleX = 0.86f + 0.14f * grow
-                    translationX = -28.dp.toPx() * (1f - grow)
-                },
+                .padding(start = 8.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CircleIconButton(contentDescription = "返回", onClick = onBack) {
@@ -147,6 +157,7 @@ fun SearchScreen(
                 }
             }
         }
+    }
     }
 }
 
@@ -214,7 +225,7 @@ private fun SearchInput(
 }
 
 @Composable
-private fun SearchResultRow(
+internal fun SearchResultRow(
     hit: SearchHit,
     query: String,
     onClick: () -> Unit,
@@ -254,7 +265,7 @@ private fun SearchResultRow(
 }
 
 @Composable
-private fun Hint(text: String) {
+internal fun Hint(text: String) {
     val colors = DsTheme.colors
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -270,7 +281,7 @@ private fun Hint(text: String) {
 }
 
 /** 把 query 的所有出现高亮（大小写不敏感），其余保持原样 */
-private fun highlight(text: String, query: String, color: androidx.compose.ui.graphics.Color): AnnotatedString {
+internal fun highlight(text: String, query: String, color: androidx.compose.ui.graphics.Color): AnnotatedString {
     if (query.isBlank() || text.isEmpty()) return AnnotatedString(text)
     return buildAnnotatedString {
         var cursor = 0

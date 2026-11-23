@@ -64,6 +64,8 @@ fun PushDrawerLayout(
     cancelAnimationSignal: Int = 0,
     modifier: Modifier = Modifier,
     drawerWidthFraction: Float = 0.825f,
+    /** 搜索展开层盖在上面时关掉抽屉手势，避免滑动穿透去改 progress */
+    gesturesEnabled: Boolean = true,
     drawer: @Composable (Modifier) -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -123,7 +125,8 @@ fun PushDrawerLayout(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(drawerOpen, pageTravelPx) {
+                .pointerInput(drawerOpen, pageTravelPx, gesturesEnabled) {
+                    if (!gesturesEnabled) return@pointerInput
                     var dragging = false
 
                     fun settle(open: Boolean) {
