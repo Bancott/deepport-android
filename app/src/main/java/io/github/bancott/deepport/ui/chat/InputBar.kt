@@ -106,41 +106,30 @@ fun DsInputBar(
             keyboard?.show()
         }
     }
-    Column(modifier = modifier.fillMaxWidth()) {
-        if (editing) {
-            EditingNotice(
-                onCancel = onCancelEdit,
-                modifier = Modifier.padding(horizontal = DsDimen.InputHorizontalPadding),
-            )
-        }
-        Surface(
-            shadowElevation = 0.dp,
-            tonalElevation = 0.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = DsDimen.InputHorizontalPadding),
-            shape = if (editing) {
-                RoundedCornerShape(
-                    topStart = 8.dp,
-                    topEnd = 8.dp,
-                    bottomStart = DsDimen.InputCornerRadius,
-                    bottomEnd = DsDimen.InputCornerRadius,
-                )
-            } else {
-                RoundedCornerShape(DsDimen.InputCornerRadius)
-            },
-            color = colors.surface1,
-            border = BorderStroke(1.dp, colors.outline),
-        ) {
-        Column(
-            modifier = Modifier.padding(
-                start = 12.dp,
-                end = 10.dp,
-                // 官方实测：卡片高 105.7 dp = 上 16 + 文本行 26 + 间距 20 + 操作行 32 + 下 12
-                top = 16.dp,
-                bottom = 12.dp,
-            ),
-        ) {
+    Surface(
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = DsDimen.InputHorizontalPadding),
+        shape = RoundedCornerShape(DsDimen.InputCornerRadius),
+        color = colors.surface1,
+        border = BorderStroke(1.dp, colors.outline),
+    ) {
+    Column {
+    // 「修改并创建分支」在输入卡内部，贴着卡片上边界（不额外留白）
+    if (editing) {
+        EditingNotice(onCancel = onCancelEdit)
+    }
+    Column(
+        modifier = Modifier.padding(
+            start = 12.dp,
+            end = 10.dp,
+            // 编辑态头部贴边，正文从 10dp 开始；普通态仍是官方 16dp
+            top = if (editing) 10.dp else 16.dp,
+            bottom = 12.dp,
+        ),
+    ) {
 
             if (state.attachments.isNotEmpty()) {
                 PendingAttachmentRow(
@@ -248,10 +237,10 @@ private fun EditingNotice(onCancel: () -> Unit, modifier: Modifier = Modifier) {
             .height(42.dp)
             .clip(
                 RoundedCornerShape(
-                    topStart = 24.dp,
-                    topEnd = 24.dp,
-                    bottomStart = 4.dp,
-                    bottomEnd = 4.dp,
+                    topStart = DsDimen.InputCornerRadius,
+                    topEnd = DsDimen.InputCornerRadius,
+                    bottomStart = 0.dp,
+                    bottomEnd = 0.dp,
                 ),
             )
             .background(colors.primaryContainer)
