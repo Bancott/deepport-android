@@ -240,11 +240,12 @@ private fun EditingNotice(onCancel: () -> Unit, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .height(40.dp)
             .clip(
+                // 与卡片同曲率：外圆角 28dp、内缩 4dp，同心圆角 = 24dp
                 RoundedCornerShape(
-                    topStart = 20.dp,
-                    topEnd = 20.dp,
-                    bottomStart = 6.dp,
-                    bottomEnd = 6.dp,
+                    topStart = 24.dp,
+                    topEnd = 24.dp,
+                    bottomStart = 8.dp,
+                    bottomEnd = 8.dp,
                 ),
             )
             .background(colors.primaryContainer)
