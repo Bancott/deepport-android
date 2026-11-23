@@ -241,9 +241,11 @@ fun SvgIcon(
 
 
 /**
- * 顶栏朗读开关：喇叭本体 + 一条斜线。
- * 关闭（静音）时斜线从左上向右下增长到 1，开启时从右下向左上缩回 0——
- * 用 [animateFloatAsState] 做长度插值，点击不再有圆形光效。
+ * 顶栏朗读开关：官方喇叭图标 + 一条自绘斜线。
+ *
+ * 斜线几何按官方 ic_mute_audio_outline_24 的位图量出来（24dp 画框，(7.2,7.2)→(18.4,19.2)，
+ * 线宽 1.7dp、圆头）。不用直接切 mute 图标，而是让斜线长度随开关平滑伸缩：
+ * 关闭时从左上向右下长到 1，开启时反向缩回 0。
  */
 @Composable
 fun SpeakerToggleGlyph(
@@ -252,34 +254,30 @@ fun SpeakerToggleGlyph(
     modifier: Modifier = Modifier,
     iconSize: Dp = 24.dp,
 ) {
-    val slash by androidx.compose.animation.core.animateFloatAsState(
+    val progress by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (enabled) 0f else 1f,
-        animationSpec = androidx.compose.animation.core.tween(220),
+        animationSpec = androidx.compose.animation.core.tween(240),
         label = "speaker-slash",
     )
     Box(modifier = modifier.size(iconSize)) {
-        SvgIcon(
-            R.drawable.ic_play_media_outline_24,
-            tint = color,
-            size = iconSize,
-        )
-        // 只在"关闭"方向做动画时补这条线：开启时线从右下往左上缩，关闭时反向长出
-        if (slash > 0.01f) {
-            androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
-                val w = size.width
-                val h = size.height
-                val startX = w * 0.24f
-                val startY = h * 0.24f
-                val endX = startX + (w * 0.52f) * slash
-                val endY = startY + (h * 0.52f) * slash
-                drawLine(
-                    color = color,
-                    start = androidx.compose.ui.geometry.Offset(startX, startY),
-                    end = androidx.compose.ui.geometry.Offset(endX, endY),
-                    strokeWidth = w * 0.075f,
-                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                )
-            }
+        SvgIcon(R.drawable.ic_play_media_outline_24, tint = color, size = iconSize)
+        androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+            val unit = size.width / 24f
+            val sx = 7.2f * unit
+            val sy = 7.2f * unit
+            val ex = 18.4f * unit
+            val ey = 19.2f * unit
+            drawLine(
+                color = color,
+                start = androidx.compose.ui.geometry.Offset(sx, sy),
+                end = androidx.compose.ui.geometry.Offset(
+                    sx + (ex - sx) * progress,
+                    sy + (ey - sy) * progress,
+                ),
+                strokeWidth = 1.7f * unit,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
         }
     }
 }
+

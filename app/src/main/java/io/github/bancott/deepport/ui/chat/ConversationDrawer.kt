@@ -435,8 +435,8 @@ private fun ConversationList(
                         ) {
                             Row(
                                 modifier = Modifier
-                                    // 纯水平位移：用左内边距推开，行高与基线不变
-                                    .padding(start = titleShift.dp)
+                                    // 头部已同高，这里只用绘制期水平位移，避免任何布局参与
+                                    .offset(x = titleShift.dp)
                                     .weight(1f),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
